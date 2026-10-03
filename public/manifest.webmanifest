@@ -1,0 +1,10 @@
+{
+  "name": "Моя история",
+  "short_name": "История",
+  "description": "Личный дневник воспоминаний",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f5f1",
+  "theme_color": "#1f2328",
+  "lang": "ru"
+}
