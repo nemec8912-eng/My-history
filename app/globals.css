@@ -70,3 +70,15 @@ input:focus, textarea:focus { border-color:#7a5cff; box-shadow:0 0 0 3px #ede9ff
   .composer { border-radius:28px; margin:auto; }
   .modalBackdrop { align-items:center; padding:24px; }
 }
+
+.mapPage { width:min(1100px,100%); margin:0 auto; padding:22px 18px 50px; }
+.mapTopbar { display:flex; gap:16px; align-items:flex-start; margin-bottom:18px; }
+.backLink { text-decoration:none; color:#633cff; font-weight:800; padding-top:6px; }
+.routeControls { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; margin-bottom:14px; }
+.routeControls label { margin:0; }
+.mapCanvas { width:100%; height:60vh; min-height:430px; border-radius:26px; overflow:hidden; background:#e9e9f2; box-shadow:0 14px 35px rgba(48,42,83,.12); }
+.routeHint { margin-top:14px; background:#fff; border:1px solid #e9e9f2; border-radius:20px; padding:16px; }
+@media (max-width:720px) {
+  .routeControls { grid-template-columns:1fr; }
+  .mapCanvas { height:55vh; min-height:390px; }
+}
