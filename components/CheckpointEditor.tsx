@@ -38,32 +38,8 @@ export function CheckpointEditor({
   canMoveDown?: boolean;
 }) {
   const [cp, setCp] = useState<Checkpoint>(value);
-  const [geoBusy, setGeoBusy] = useState(false);
   const set = (patch: Partial<Checkpoint>) => setCp((c) => ({ ...c, ...patch }));
   const setStyle = (patch: Partial<Checkpoint["style"]>) => setCp((c) => ({ ...c, style: { ...c.style, ...patch } }));
-
-  function locate() {
-    if (!navigator.geolocation) return alert("Геолокация недоступна");
-    setGeoBusy(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeoBusy(false);
-        set({ location: { ...cp.location, lat: pos.coords.latitude, lon: pos.coords.longitude } });
-      },
-      () => {
-        setGeoBusy(false);
-        alert("Не удалось определить местоположение");
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
-  }
-
-  function setCoord(key: "lat" | "lon", v: string) {
-    const num = Number(v.replace(",", "."));
-    const loc = cp.location ?? { lat: 0, lon: 0 };
-    if (v.trim() === "") return set({ location: loc.label ? { ...loc, [key]: 0 } : undefined });
-    if (!Number.isNaN(num)) set({ location: { ...loc, [key]: num } });
-  }
 
   return (
     <form
@@ -108,22 +84,20 @@ export function CheckpointEditor({
         <textarea rows={3} value={cp.description ?? ""} onChange={(e) => set({ description: e.target.value || undefined })} placeholder="Что здесь было?" />
       </label>
 
-      <fieldset>
-        <legend>Местоположение</legend>
+      <label>
+        Место
         <input
           placeholder="Адрес или название места"
           value={cp.location?.label ?? ""}
-          onChange={(e) => set({ location: { lat: cp.location?.lat ?? 0, lon: cp.location?.lon ?? 0, label: e.target.value || undefined } })}
+          onChange={(e) =>
+            set({
+              location: e.target.value
+                ? { lat: cp.location?.lat ?? 0, lon: cp.location?.lon ?? 0, label: e.target.value }
+                : undefined,
+            })
+          }
         />
-        <div className="row three">
-          <input inputMode="decimal" placeholder="Широта" value={cp.location?.lat || ""} onChange={(e) => setCoord("lat", e.target.value)} />
-          <input inputMode="decimal" placeholder="Долгота" value={cp.location?.lon || ""} onChange={(e) => setCoord("lon", e.target.value)} />
-          <button type="button" className="softBtn" onClick={locate} disabled={geoBusy}>
-            {geoBusy ? "…" : "📍 Я здесь"}
-          </button>
-        </div>
-        <p className="hint">Точку также можно поставить касанием на вкладке «Карта».</p>
-      </fieldset>
+      </label>
 
       <fieldset>
         <legend>Форма</legend>

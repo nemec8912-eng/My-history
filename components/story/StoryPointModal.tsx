@@ -58,12 +58,7 @@ export function StoryPointModal({
           <h3>{cp.title}</h3>
           <div className="metaList">
             {cp.time && <span>🕒 {cp.time}</span>}
-            {cp.location && (cp.location.label || cp.location.lat) ? (
-              <span>
-                📍 {cp.location.label ?? ""}
-                {cp.location.lat ? ` (${cp.location.lat.toFixed(5)}, ${cp.location.lon.toFixed(5)})` : ""}
-              </span>
-            ) : null}
+            {cp.location?.label && <span>📍 {cp.location.label}</span>}
           </div>
           {cp.description && <p className="pointText">{cp.description}</p>}
           <MediaGallery ids={cp.mediaIds} empty="Фото, видео и голосовые заметки можно добавить в редактировании." />

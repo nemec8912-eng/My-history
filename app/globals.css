@@ -71,17 +71,7 @@ input:focus, textarea:focus { border-color:#7a5cff; box-shadow:0 0 0 3px #ede9ff
   .modalBackdrop { align-items:center; padding:24px; }
 }
 
-.mapPage { width:min(1100px,100%); margin:0 auto; padding:22px 18px 50px; }
-.mapTopbar { display:flex; gap:16px; align-items:flex-start; margin-bottom:18px; }
-.backLink { text-decoration:none; color:#633cff; font-weight:800; padding-top:6px; }
-.routeControls { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; margin-bottom:14px; }
-.routeControls label { margin:0; }
-.mapCanvas { width:100%; height:60vh; min-height:430px; border-radius:26px; overflow:hidden; background:#e9e9f2; box-shadow:0 14px 35px rgba(48,42,83,.12); }
-.routeHint { margin-top:14px; background:#fff; border:1px solid #e9e9f2; border-radius:20px; padding:16px; }
-@media (max-width:720px) {
-  .routeControls { grid-template-columns:1fr; }
-  .mapCanvas { height:55vh; min-height:390px; }
-}
+
 
 /* ───────── Общие ───────── */
 html { -webkit-text-size-adjust: 100%; }
@@ -187,9 +177,6 @@ input, textarea, select { font-size: 16px; } /* iOS не зумит поле п�
 .tripTitle .muted { font-size:14px; }
 .tripCover { margin-top:14px; border-radius:24px; overflow:hidden; height:170px; }
 .tripCover img, .tripCover .imgPlaceholder { width:100%; height:100%; object-fit:cover; }
-.segmented { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; margin-top:14px; background:#fff; border:1px solid #ebe9f5; border-radius:20px; }
-.segmented button { border:0; background:transparent; border-radius:16px; padding:12px; font-weight:800; color:#6e7180; min-height:46px; transition: background .2s, color .2s; }
-.segmented button.on { background:#633cff; color:#fff; box-shadow:0 8px 18px rgba(99,60,255,.28); }
 .tripStats { display:flex; flex-wrap:wrap; gap:8px 16px; margin:14px 4px 4px; color:#6e7180; font-size:14px; }
 .tripStats strong { color:#151821; }
 .tripDesc { margin:8px 4px 0; color:#4b4e5c; line-height:1.5; }
@@ -254,44 +241,3 @@ input, textarea, select { font-size: 16px; } /* iOS не зумит поле п�
 .momentCard { display:flex; gap:12px; align-items:center; text-align:left; border:0; background:#fff; border-radius:18px; padding:10px; color:inherit; box-shadow:0 6px 18px rgba(48,42,83,.06); }
 .momentThumb { width:64px; height:64px; border-radius:12px; object-fit:cover; flex:none; }
 .momentText { display:grid; gap:2px; min-width:0; }
-
-/* ───────── Карта поездки ───────── */
-.mapSection { margin-top:12px; display:grid; gap:10px; }
-.pickBar { display:flex; gap:10px; align-items:center; }
-.pickBar select { margin:0; }
-.tripMap { position:relative; height:min(68dvh, 620px); min-height:360px; border-radius:24px; overflow:hidden; background:#e9e9f2; box-shadow:0 14px 35px rgba(48,42,83,.12); }
-.tripMap.picking { outline:3px solid #633cff; }
-.tripMapCanvas { position:absolute; inset:0; }
-.mapOverlay { position:absolute; inset:0; display:grid; place-items:center; padding:24px; text-align:center; color:#4b4e5c; background:rgba(245,246,251,.8); }
-.mapMarker { position:relative; cursor:pointer; filter: drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
-.mapMarker svg { display:block; }
-.mapMarkerText { position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-weight:800; }
-.mapLabel { position:absolute; left:100%; top:50%; transform:translateY(-50%); margin-left:6px; white-space:nowrap; background:#fff; border-radius:10px; padding:4px 8px; font:700 12px -apple-system, sans-serif; color:#151821; }
-
-/* ───────── Построение маршрута ───────── */
-.routePlanner { background:#fff; border:1px solid #ebe9f5; border-radius:24px; padding:14px; display:grid; gap:10px; box-shadow:0 8px 24px rgba(48,42,83,.06); }
-.routePlanner .editorActions { margin-top:4px; }
-.routeFields { display:grid; gap:4px; }
-@media (min-width:720px) { .routeFields { grid-template-columns:1fr 1fr; gap:10px; } }
-.addrField { position:relative; }
-.addrField label { margin:4px 0; }
-.addrOk { position:absolute; right:14px; top:44px; color:#16a36a; font-weight:900; }
-.suggestList { position:absolute; z-index:30; left:0; right:0; top:calc(100% - 2px); list-style:none; margin:0; padding:6px; background:#fff; border:1px solid #e4e1f2; border-radius:16px; box-shadow:0 16px 40px rgba(48,42,83,.18); max-height:300px; overflow-y:auto; }
-.suggestList button { width:100%; text-align:left; border:0; background:none; padding:10px; border-radius:12px; display:grid; gap:2px; color:inherit; min-height:44px; }
-.suggestList button:hover, .suggestList button:active { background:#f4f2ff; }
-.suggestList span { font-size:13px; color:#7b7e89; }
-.fieldErr { color:#d42437; font-size:13px; margin:4px 0 0; }
-.modeRow { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
-.modeBtn { border:1.5px solid #e4e1f2; background:#fff; border-radius:16px; padding:8px 4px; font-weight:750; font-size:12px; color:#4b4e5c; display:grid; justify-items:center; gap:2px; min-height:58px; }
-.modeBtn span { font-size:20px; }
-.modeBtn.on { border-color:#633cff; background:#f2efff; color:#3d22c4; }
-.routeSummary { background:#f7f6fc; border-radius:18px; padding:12px; display:grid; gap:10px; }
-.routeTotals { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:15px; }
-.routeChain { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
-.chainItem { display:inline-flex; align-items:center; gap:4px; }
-.chainArrow { color:#b0abc8; font-weight:800; }
-.chainIcon { width:32px; height:32px; border-radius:10px; display:grid; place-items:center; background:#fff; font-size:16px; box-shadow:0 2px 6px rgba(48,42,83,.08); }
-.routeSteps { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
-.routeSteps li { display:flex; gap:10px; align-items:flex-start; }
-.routeSteps li > span:last-child { display:grid; gap:2px; min-width:0; }
-.stepIcon { width:30px; height:30px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:15px; color:#fff; }

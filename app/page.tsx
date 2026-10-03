@@ -106,11 +106,10 @@ export default function Home() {
         <div>
           <p className="eyebrow">Твои воспоминания</p>
           <h2>Каждая поездка — отдельная история пути</h2>
-          <p className="muted">Маршрут, контрольные точки, фото, видео и голосовые заметки — в одном событии.</p>
+          <p className="muted">Свой маршрут из контрольных точек, фото, видео и голосовые заметки — в одном событии.</p>
         </div>
         <div className="heroActions">
           <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
-          <Link className="secondaryButton" href="/map">Карта маршрута</Link>
         </div>
       </section>
 

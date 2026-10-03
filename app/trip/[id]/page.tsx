@@ -6,8 +6,6 @@ import { useMemo, useState } from "react";
 import { DestinationCard } from "@/components/story/DestinationCard";
 import { StoryPointModal } from "@/components/story/StoryPointModal";
 import { StoryRoute } from "@/components/story/StoryRoute";
-import { TripMap } from "@/components/map/TripMap";
-import { RoutePlanner } from "@/components/map/RoutePlanner";
 import { Sheet } from "@/components/Sheet";
 import { TripEditor } from "@/components/TripEditor";
 import { MediaImg } from "@/components/media/Media";
@@ -20,11 +18,9 @@ export default function TripPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { trip, status, error, saving, update, remove } = useTrip(id);
-  const [tab, setTab] = useState<"story" | "map">("story");
   const [openId, setOpenId] = useState<string | null>(null);
   const [newId, setNewId] = useState<string | null>(null);
   const [editTrip, setEditTrip] = useState(false);
-  const [pickFor, setPickFor] = useState<string>("");
 
   const stats = useMemo(() => {
     if (!trip) return null;
@@ -99,11 +95,6 @@ export default function TripPage() {
         </div>
       )}
 
-      <div className="segmented" role="tablist">
-        <button role="tab" aria-selected={tab === "map"} className={tab === "map" ? "on" : ""} onClick={() => setTab("map")}>Карта</button>
-        <button role="tab" aria-selected={tab === "story"} className={tab === "story" ? "on" : ""} onClick={() => setTab("story")}>История</button>
-      </div>
-
       {stats && (
         <div className="tripStats">
           <span><strong>{stats.points}</strong> {plural(stats.points, "точка", "точки", "точек")}</span>
@@ -112,40 +103,12 @@ export default function TripPage() {
         </div>
       )}
 
-      {tab === "story" ? (
-        <section className="storySection">
-          {trip.description && <p className="tripDesc">{trip.description}</p>}
-          <StoryRoute trip={trip} onOpen={openPoint} />
-          <button className="addPointBtn" onClick={addPoint}>+ Добавить точку</button>
-          {end?.place && <DestinationCard cp={end} onOpen={() => router.push(`/trip/${trip.id}/place/${end.id}`)} />}
-        </section>
-      ) : (
-        <section className="mapSection">
-          <RoutePlanner trip={trip} onChange={update} />
-          <div className="pickBar">
-            <select value={pickFor} onChange={(e) => setPickFor(e.target.value)}>
-              <option value="">Поставить точку на карте…</option>
-              {cps.map((c, i) => (
-                <option key={c.id} value={c.id}>{i + 1}. {c.title}</option>
-              ))}
-            </select>
-            {pickFor && <span className="muted small">Коснитесь карты</span>}
-          </div>
-          <TripMap
-            trip={trip}
-            picking={Boolean(pickFor)}
-            onMarkerClick={(cid) => setOpenId(cid)}
-            onMapClick={(lat, lon) => {
-              if (!pickFor) return;
-              update({
-                ...trip,
-                checkpoints: cps.map((c) => (c.id === pickFor ? { ...c, location: { ...c.location, lat, lon } } : c)),
-              });
-              setPickFor("");
-            }}
-          />
-        </section>
-      )}
+      <section className="storySection">
+        {trip.description && <p className="tripDesc">{trip.description}</p>}
+        <StoryRoute trip={trip} onOpen={openPoint} />
+        <button className="addPointBtn" onClick={addPoint}>+ Добавить точку</button>
+        {end?.place && <DestinationCard cp={end} onOpen={() => router.push(`/trip/${trip.id}/place/${end.id}`)} />}
+      </section>
 
       {openCp && (
         <StoryPointModal
