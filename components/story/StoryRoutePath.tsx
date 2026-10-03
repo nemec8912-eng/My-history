@@ -13,14 +13,30 @@ export function StoryRoutePath({ layout }: { layout: StoryLayout }) {
   const segRefs = useRef<(SVGPathElement | null)[]>([]);
   const [mids, setMids] = useState<{ x: number; y: number }[]>([]);
 
-  // Середины участков — там стоит значок способа передвижения.
+  // Значок способа передвижения ставим на участке там, где он не залезает на карточки и маркеры.
   useEffect(() => {
+    const R = 17;
+    const boxes = layout.nodes.flatMap((n) => {
+      const cardH = n.cp.kind === "end" ? 96 : 84;
+      const cardX1 = n.side === "right" ? n.x + n.d / 2 + 6 : n.x - n.d / 2 - 14 - layout.labelWidth;
+      return [
+        { x1: cardX1 - R, x2: cardX1 + layout.labelWidth + 8 + R, y1: n.y - cardH / 2 - R, y2: n.y + cardH / 2 + R },
+        { x1: n.x - n.d / 2 - R, x2: n.x + n.d / 2 + R, y1: n.y - n.d / 2 - R, y2: n.y + n.d / 2 + R },
+      ];
+    });
+    const free = (x: number, y: number) => !boxes.some((b) => x > b.x1 && x < b.x2 && y > b.y1 && y < b.y2);
     setMids(
       layout.segments.map((_, i) => {
         const p = segRefs.current[i];
         if (!p) return { x: 0, y: 0 };
-        const pt = p.getPointAtLength(p.getTotalLength() / 2);
-        return { x: pt.x, y: pt.y };
+        const len = p.getTotalLength();
+        let fallback = p.getPointAtLength(len / 2);
+        for (const t of [0.5, 0.42, 0.58, 0.34, 0.66, 0.27, 0.73, 0.2, 0.8]) {
+          const pt = p.getPointAtLength(len * t);
+          if (free(pt.x, pt.y)) return { x: pt.x, y: pt.y };
+          if (t === 0.5) fallback = pt;
+        }
+        return { x: fallback.x, y: fallback.y };
       })
     );
   }, [layout]);
