@@ -24,7 +24,7 @@ async function run(name, browserType, device) {
     await shot("2-trip");
     await shot("3-trip-full", true);
     await page.locator(".storyCard", { hasText: "Кафе" }).first().click();
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(1200);
     log.push(`[${name}] modal: ` + JSON.stringify(await page.evaluate(() => {
       const r = (sel) => { const el = document.querySelector(sel); if (!el) return null; const b = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { top: Math.round(b.top), h: Math.round(b.height), op: cs.opacity, pos: cs.position, tr: cs.transform }; };
       const vv = window.visualViewport;

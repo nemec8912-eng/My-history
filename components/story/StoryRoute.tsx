@@ -13,6 +13,13 @@ import { StoryRoutePath } from "./StoryRoutePath";
 export function StoryRoute({ trip, onOpen }: { trip: Trip; onOpen: (cp: Checkpoint) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const [settled, setSettled] = useState(false);
+
+  // Подстраховка: после анимации появления элементы гарантированно видимы.
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), 4500);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -30,7 +37,7 @@ export function StoryRoute({ trip, onOpen }: { trip: Trip; onOpen: (cp: Checkpoi
   );
 
   return (
-    <div ref={ref} className="storyRoute" style={{ height: layout?.height ?? 320 }}>
+    <div ref={ref} className={`storyRoute ${settled ? "settled" : ""}`} style={{ height: layout?.height ?? 320 }}>
       {layout && (
         <>
           <StoryRoutePath layout={layout} />
