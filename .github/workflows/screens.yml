@@ -1,0 +1,39 @@
+name: Screenshots
+
+# Снимки экрана сборки (iPhone/WebKit, Android, ПК) для проверки интерфейса.
+# Результат публикуется в ветку ci-screens.
+on:
+  push:
+    branches: ["wip/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm install --no-save --no-audit --no-fund playwright@1 serve@14
+      - run: npx playwright install --with-deps webkit chromium
+      - name: Take screenshots
+        run: |
+          npx serve out -l 3000 > /dev/null 2>&1 &
+          sleep 3
+          node e2e/screens.mjs
+      - name: Publish to ci-screens branch
+        run: |
+          cd screens
+          git init -q -b ci-screens
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          echo "${{ github.sha }}" > SHA
+          git add -A
+          git commit -qm "Screens for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:ci-screens
