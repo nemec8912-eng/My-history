@@ -1,13 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { CLOUD } from "./cloud.config";
 
 let client: SupabaseClient | null | undefined;
 
 /** Возвращает клиент Supabase или null, если переменные окружения не заданы. */
 export function getSupabase(): SupabaseClient | null {
   if (client !== undefined) return client;
-  // Имена переменных должны быть записаны буквально — так Next.js подставляет их в клиентский код.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = CLOUD.url;
+  const anonKey = CLOUD.anonKey;
   if (!url || !anonKey || typeof window === "undefined") {
     if (typeof window !== "undefined") client = null;
     return null;
@@ -19,7 +19,7 @@ export function getSupabase(): SupabaseClient | null {
 }
 
 export function isCloudConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return Boolean(CLOUD.url && CLOUD.anonKey);
 }
 
 export async function getUserId(): Promise<string | null> {
@@ -33,8 +33,8 @@ export const MEDIA_BUCKET = "media";
 
 /** Проверка связи с Supabase: ok, нет сети/заблокирован, или ошибка конфигурации. */
 export async function pingCloud(): Promise<{ ok: boolean; reason?: string }> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = CLOUD.url;
+  const key = CLOUD.anonKey;
   if (!url || !key) return { ok: false, reason: "Не заданы адрес и ключ Supabase" };
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 8000);
