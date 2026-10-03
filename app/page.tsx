@@ -1,81 +1,95 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { MediaImg, MediaPicker } from "@/components/media/Media";
+import { Sheet } from "@/components/Sheet";
+import { formatDate, plural } from "@/lib/format";
+import { createCheckpoint } from "@/lib/markerStyle";
+import { getRepo, newTrip } from "@/lib/repo";
+import type { Checkpoint, Trip } from "@/lib/types";
 
-type Memory = {
-  id: string;
-  title: string;
-  date: string;
-  place: string;
-  text: string;
-  photos: string[];
-};
+const today = () => new Date().toISOString().slice(0, 10);
 
-const demo: Memory = {
-  id: "demo-zoo",
-  title: "Московский зоопарк",
-  date: "2026-10-04",
-  place: "Москва",
-  text: "Поездка в зоопарк. Все фотографии и впечатления хранятся внутри одного события.",
-  photos: [],
-};
+function demoTrip(): Trip {
+  const p = (title: string, time: string, icon: string, color: string, extra: Partial<Checkpoint> = {}) =>
+    createCheckpoint("regular", { title, time, icon, style: { shape: "circle", color, size: "m", showLabel: false, showPhoto: true }, ...extra });
+  return newTrip({
+    title: "Поездка в зоопарк (пример)",
+    date: today(),
+    place: "Москва",
+    description: "Пример поездки: откройте любую точку, добавьте фото, поменяйте форму, цвет и размер.",
+    checkpoints: [
+      createCheckpoint("start", { title: "Дом", time: "08:00", icon: "🏠", description: "Выезд из дома", location: { lat: 56.0123, lon: 37.4745, label: "Лобня" } }),
+      p("Станция", "08:20", "🚉", "#2f6bff", { description: "Станция Лобня", location: { lat: 56.0136, lon: 37.4824 } }),
+      p("Электричка", "08:40", "🚆", "#2f6bff", { description: "До Савёловского вокзала", style: { shape: "square", color: "#2f6bff", size: "m", showLabel: false, showPhoto: true } }),
+      p("Метро", "09:15", "🚇", "#ef3b4a", { description: "Савёловская", importance: 1, location: { lat: 55.7939, lon: 37.5871 } }),
+      p("Пересадка", "09:30", "🔁", "#8b3dff", { style: { shape: "diamond", color: "#8b3dff", size: "s", showLabel: false, showPhoto: true } }),
+      p("Кафе", "10:10", "☕", "#ff8a1f", { description: "Завтрак в кафе", importance: 2, style: { shape: "circle", color: "#ff8a1f", size: "l", showLabel: false, showPhoto: true } }),
+      p("Парк", "10:45", "🌳", "#16a36a", { description: "Прогулка по парку", style: { shape: "triangle", color: "#16a36a", size: "m", showLabel: false, showPhoto: true } }),
+      createCheckpoint("end", {
+        title: "Московский зоопарк",
+        time: "11:20",
+        icon: "🐘",
+        description: "Основная локация поездки",
+        location: { lat: 55.7612, lon: 37.5784, label: "Большая Грузинская ул., 1" },
+        place: { arrivedAt: "11:20", leftAt: "16:30", moments: [] },
+      }),
+    ],
+  });
+}
 
 export default function Home() {
-  const [memories, setMemories] = useState<Memory[]>([demo]);
+  const router = useRouter();
+  const [trips, setTrips] = useState<Trip[] | null>(null);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    title: "",
-    date: "2026-10-04",
-    place: "",
-    text: "",
-    photos: [] as string[],
-  });
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState({ title: "", date: today(), time: "", place: "", text: "", from: "", to: "", cover: undefined as string | undefined });
 
   useEffect(() => {
-    const saved = localStorage.getItem("my-history-events");
-    if (saved) setMemories(JSON.parse(saved));
+    getRepo()
+      .then((r) => r.list())
+      .then(setTrips)
+      .catch(() => setTrips([]));
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("my-history-events", JSON.stringify(memories));
-  }, [memories]);
+  const totals = useMemo(() => {
+    const list = trips ?? [];
+    return {
+      trips: list.length,
+      media: list.reduce((s, t) => s + t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0), 0),
+    };
+  }, [trips]);
 
-  const totalPhotos = useMemo(
-    () => memories.reduce((sum, item) => sum + item.photos.length, 0),
-    [memories]
-  );
-
-  function addPhotos(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setDraft((current) => ({
-          ...current,
-          photos: [...current.photos, String(reader.result)],
-        }));
-      };
-      reader.readAsDataURL(file);
-    });
-    event.target.value = "";
+  async function create(trip: Trip) {
+    setBusy(true);
+    try {
+      await (await getRepo()).save(trip);
+      router.push(`/trip/${trip.id}`);
+    } catch (e) {
+      alert("Не удалось сохранить: " + (e instanceof Error ? e.message : String(e)));
+      setBusy(false);
+    }
   }
 
-  function saveMemory(event: FormEvent) {
-    event.preventDefault();
+  function submit(e: FormEvent) {
+    e.preventDefault();
     if (!draft.title.trim()) return;
-    setMemories((current) => [
-      {
-        id: crypto.randomUUID(),
+    const start = createCheckpoint("start", { title: draft.from.trim() || "Начало пути", time: draft.time || undefined });
+    const end = createCheckpoint("end", { title: draft.to.trim() || draft.title.trim() });
+    void create(
+      newTrip({
         title: draft.title.trim(),
         date: draft.date,
-        place: draft.place.trim(),
-        text: draft.text.trim(),
-        photos: draft.photos,
-      },
-      ...current.filter((item) => item.id !== "demo-zoo"),
-    ]);
-    setDraft({ title: "", date: "2026-10-04", place: "", text: "", photos: [] });
-    setOpen(false);
+        time: draft.time || undefined,
+        place: draft.place.trim() || undefined,
+        description: draft.text.trim() || undefined,
+        coverMediaId: draft.cover,
+        mediaIds: draft.cover ? [draft.cover] : [],
+        checkpoints: [start, end],
+      })
+    );
   }
 
   return (
@@ -91,64 +105,69 @@ export default function Home() {
       <section className="hero">
         <div>
           <p className="eyebrow">Твои воспоминания</p>
-          <h2>Каждая прогулка — отдельная история</h2>
-          <p className="muted">
-            Создай одно событие и добавляй в него все фотографии этой поездки.
-          </p>
+          <h2>Каждая поездка — отдельная история пути</h2>
+          <p className="muted">Маршрут, контрольные точки, фото, видео и голосовые заметки — в одном событии.</p>
         </div>
-        <div className="heroActions"><button className="primary" onClick={() => setOpen(true)}>+ Добавить событие</button><a className="secondaryButton" href="/map">Открыть карту маршрута</a></div>
+        <div className="heroActions">
+          <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
+          <Link className="secondaryButton" href="/map">Карта маршрута</Link>
+        </div>
       </section>
 
       <section className="stats">
-        <div><strong>{memories.length}</strong><span>событий</span></div>
-        <div><strong>{totalPhotos}</strong><span>фотографий</span></div>
+        <div><strong>{totals.trips}</strong><span>{plural(totals.trips, "поездка", "поездки", "поездок")}</span></div>
+        <div><strong>{totals.media}</strong><span>{plural(totals.media, "файл", "файла", "файлов")}</span></div>
       </section>
 
       <section className="section">
         <div className="sectionTitle">
-          <h3>Мои события</h3>
-          <button className="ghost">Календарь</button>
+          <h3>Мои поездки</h3>
         </div>
 
+        {trips && trips.length === 0 && (
+          <div className="emptyCard">
+            <p>Здесь появятся ваши поездки.</p>
+            <div className="heroActions">
+              <button className="primary" onClick={() => setOpen(true)}>Создать поездку</button>
+              <button className="softBtn" disabled={busy} onClick={() => create(demoTrip())}>Открыть пример</button>
+            </div>
+          </div>
+        )}
+
         <div className="timeline">
-          {memories.map((item) => (
-            <article className="card" key={item.id}>
-              <div className="datePill">{new Date(item.date + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</div>
-              <div className="photoPlaceholder" style={item.photos[0] ? { backgroundImage: `url(${item.photos[0]})` } : undefined}>
-                {!item.photos[0] && "Обложка события"}
-                {item.photos.length > 0 && <span className="photoCount">{item.photos.length} фото</span>}
-              </div>
-              <div className="cardBody">
-                <p className="place">{item.place || "Место не указано"}</p>
-                <h4>{item.title}</h4>
-                <p className="muted">{item.text || "Добавь описание воспоминания."}</p>
-                {item.photos.length > 1 && (
-                  <div className="thumbs">
-                    {item.photos.slice(1, 5).map((photo, index) => (
-                      <img key={index} src={photo} alt="" />
-                    ))}
-                    {item.photos.length > 5 && <span>+{item.photos.length - 5}</span>}
-                  </div>
-                )}
-              </div>
-            </article>
-          ))}
+          {trips?.map((t) => {
+            const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
+            const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
+            return (
+              <Link className="card" key={t.id} href={`/trip/${t.id}`}>
+                <div className="datePill">{formatDate(t.date)}{t.time ? ` · ${t.time}` : ""}</div>
+                <div className="photoPlaceholder">
+                  {cover ? <MediaImg id={cover} variant="original" className="coverImg" /> : "Обложка поездки"}
+                  {media > 0 && <span className="photoCount">{media} {plural(media, "файл", "файла", "файлов")}</span>}
+                </div>
+                <div className="cardBody">
+                  <p className="place">{t.place || "Место не указано"}</p>
+                  <h4>{t.title}</h4>
+                  <p className="muted">{t.description || `${t.checkpoints.length} ${plural(t.checkpoints.length, "точка", "точки", "точек")} маршрута`}</p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
+        {trips && trips.length > 0 && (
+          <button className="softBtn" style={{ marginTop: 16 }} disabled={busy} onClick={() => create(demoTrip())}>
+            + Пример поездки
+          </button>
+        )}
       </section>
 
       {open && (
-        <div className="modalBackdrop" onClick={() => setOpen(false)}>
-          <form className="composer" onSubmit={saveMemory} onClick={(e) => e.stopPropagation()}>
-            <div className="composerHead">
-              <div>
-                <p className="eyebrow">Новая история</p>
-                <h3>Добавить событие</h3>
-              </div>
-              <button className="close" type="button" onClick={() => setOpen(false)}>×</button>
-            </div>
-
+        <Sheet onClose={() => setOpen(false)}>
+          <form className="editor" onSubmit={submit}>
+            <p className="eyebrow">Новая история</p>
+            <h3>Новая поездка</h3>
             <label>
-              Название прогулки
+              Название
               <input required placeholder="Например, Московский зоопарк" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
             </label>
             <div className="row">
@@ -157,30 +176,36 @@ export default function Home() {
                 <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
               </label>
               <label>
-                Место
-                <input placeholder="Москва" value={draft.place} onChange={(e) => setDraft({ ...draft, place: e.target.value })} />
+                Время выхода
+                <input type="time" value={draft.time} onChange={(e) => setDraft({ ...draft, time: e.target.value })} />
+              </label>
+            </div>
+            <div className="row">
+              <label>
+                Откуда
+                <input placeholder="Дом" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
+              </label>
+              <label>
+                Куда
+                <input placeholder="Московский зоопарк" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
               </label>
             </div>
             <label>
-              Что запомнилось
-              <textarea rows={4} placeholder="Расскажи или позже добавь голосовую заметку..." value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+              Город / место
+              <input placeholder="Москва" value={draft.place} onChange={(e) => setDraft({ ...draft, place: e.target.value })} />
             </label>
-
-            <label className="upload">
-              + Добавить фотографии
-              <input type="file" accept="image/*" multiple onChange={addPhotos} />
+            <label>
+              Описание
+              <textarea rows={3} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
             </label>
-
-            {draft.photos.length > 0 && (
-              <div className="previewGrid">
-                {draft.photos.map((photo, index) => <img src={photo} alt="" key={index} />)}
-              </div>
-            )}
-
-            <p className="hint">{draft.photos.length} фото выбрано</p>
-            <button className="primary wide" type="submit">Сохранить событие</button>
+            <fieldset>
+              <legend>Обложка</legend>
+              {draft.cover && <MediaImg id={draft.cover} variant="original" className="coverPreview" />}
+              <MediaPicker kinds={["image"]} onAdd={(items) => setDraft((d) => ({ ...d, cover: items.find((i) => i.kind === "image")?.id ?? d.cover }))} />
+            </fieldset>
+            <button className="primary wide" type="submit" disabled={busy}>Создать и открыть</button>
           </form>
-        </div>
+        </Sheet>
       )}
     </main>
   );
