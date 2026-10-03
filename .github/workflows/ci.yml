@@ -16,6 +16,16 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
       - name: Type check
-        run: npx tsc --noEmit
+        run: |
+          set -o pipefail
+          npx tsc --noEmit --pretty false 2>&1 | tee tsc.log || {
+            grep -E 'error TS' tsc.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
       - name: Build
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log || {
+            echo "::error title=build::$(tail -n 60 build.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            exit 1
+          }
