@@ -174,14 +174,26 @@ export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint
     if (i >= pts.length) return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y + 90 };
     return pts[i];
   };
+  // У настоящих точек касательная почти вертикальная: линия сначала уходит вниз,
+  // проходит под карточкой и только потом поворачивает в сторону.
+  const isReal = new Set(realIdx);
   const k = 1 / 5.5;
   const curve = (i: number) => {
     const p0 = get(i - 1);
     const p1 = get(i);
     const p2 = get(i + 1);
     const p3 = get(i + 2);
-    const c1 = { x: p1.x + (p2.x - p0.x) * k, y: p1.y + Math.max((p2.y - p0.y) * k, (p2.y - p1.y) * 0.22) };
-    const c2 = { x: p2.x - (p3.x - p1.x) * k, y: p2.y - Math.max((p3.y - p1.y) * k, (p2.y - p1.y) * 0.22) };
+    const dy = p2.y - p1.y;
+    const a = isReal.has(i);
+    const b = isReal.has(i + 1);
+    const c1 = {
+      x: p1.x + (p2.x - p0.x) * k * (a ? 0.25 : 1),
+      y: p1.y + Math.max((p2.y - p0.y) * k, dy * (a ? 0.55 : 0.22)),
+    };
+    const c2 = {
+      x: p2.x - (p3.x - p1.x) * k * (b ? 0.25 : 1),
+      y: p2.y - Math.max((p3.y - p1.y) * k, dy * (b ? 0.55 : 0.22)),
+    };
     return `C ${r1(c1.x)} ${r1(c1.y)} ${r1(c2.x)} ${r1(c2.y)} ${p2.x} ${p2.y}`;
   };
 
