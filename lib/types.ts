@@ -60,6 +60,8 @@ export type Checkpoint = {
   id: string;
   kind: CheckpointKind;
   title: string;
+  /** Короткий значок внутри маркера (эмодзи), необязательно. */
+  icon?: string;
   description?: string;
   /** Время в формате HH:MM. */
   time?: string;
