@@ -3,7 +3,8 @@ import { chromium, devices, webkit } from "playwright";
 import fs from "node:fs";
 
 const BASE = process.env.APP_URL || "http://localhost:3000";
-const OUT = "screens";
+const OUT = process.env.OUT_DIR || "screens";
+const ONLY = process.env.ONLY;
 fs.mkdirSync(OUT, { recursive: true });
 const log = [];
 
@@ -57,8 +58,8 @@ async function run(name, browserType, device) {
   await browser.close();
 }
 
-await run("iphone", webkit, devices["iPhone 13"]);
-await run("android", chromium, devices["Pixel 7"]);
-await run("desktop", chromium, { viewport: { width: 1280, height: 860 } });
+if (!ONLY || ONLY.includes("iphone")) await run("iphone", webkit, devices["iPhone 13"]);
+if (!ONLY || ONLY.includes("android")) await run("android", chromium, devices["Pixel 7"]);
+if (!ONLY || ONLY.includes("desktop")) await run("desktop", chromium, { viewport: { width: 1280, height: 860 } });
 fs.writeFileSync(`${OUT}/log.txt`, log.join("\n") + "\n");
 console.log(log.join("\n"));

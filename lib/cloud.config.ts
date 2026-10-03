@@ -5,5 +5,5 @@
  */
 export const CLOUD = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_R2vAXu30FqIL0HgXGXV_cQ_GxAR3OgH",
 };
