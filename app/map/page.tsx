@@ -1,74 +1,66 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { load } from "@2gis/mapgl";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { RoutePlanner } from "@/components/map/RoutePlanner";
+import { TripMap } from "@/components/map/TripMap";
+import { createCheckpoint } from "@/lib/markerStyle";
+import { getRepo, newTrip } from "@/lib/repo";
+import type { Trip } from "@/lib/types";
 
+/** Быстрый маршрут без поездки. Можно сохранить его как новую поездку. */
 export default function MapPage() {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState("Загружаю карту 2ГИС...");
+  const router = useRouter();
+  const [trip, setTrip] = useState<Trip>(() =>
+    newTrip({
+      id: "draft-route",
+      title: "Новый маршрут",
+      checkpoints: [createCheckpoint("start", { title: "Откуда" }), createCheckpoint("end", { title: "Куда" })],
+    })
+  );
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_2GIS_MAP_KEY;
-    if (!key) {
-      setStatus("Ключ 2ГИС ещё не подключён в Vercel");
-      return;
+  async function saveAsTrip() {
+    setSaving(true);
+    const title = trip.route?.to.label?.split(",")[0] || "Новая поездка";
+    const t = newTrip({
+      title,
+      route: trip.route,
+      checkpoints: trip.checkpoints.map((c) =>
+        c.kind === "start"
+          ? { ...c, title: c.location?.label?.split(",")[0] || "Начало пути" }
+          : c.kind === "end"
+            ? { ...c, title: c.location?.label?.split(",")[0] || title }
+            : c
+      ),
+    });
+    try {
+      await (await getRepo()).save(t);
+      router.push(`/trip/${t.id}`);
+    } catch (e) {
+      alert("Не удалось сохранить: " + (e instanceof Error ? e.message : String(e)));
+      setSaving(false);
     }
-
-    let map: any;
-
-    load()
-      .then((mapgl) => {
-        if (!containerRef.current) return;
-        map = new mapgl.Map(containerRef.current, {
-          center: [37.615655, 55.768005],
-          zoom: 11,
-          key,
-        });
-
-        new mapgl.Marker(map, {
-          coordinates: [37.615655, 55.768005],
-        });
-
-        setStatus("Карта подключена");
-      })
-      .catch(() => setStatus("Не удалось загрузить карту"));
-
-    return () => {
-      if (map) map.destroy();
-    };
-  }, []);
+  }
 
   return (
-    <main className="mapPage">
-      <div className="mapTopbar">
-        <a className="backLink" href="/">← Назад</a>
-        <div>
-          <p className="eyebrow">Маршрут поездки</p>
-          <h1>Карта 2ГИС</h1>
-          <p className="muted">{status}</p>
+    <main className="tripPage">
+      <header className="tripTop">
+        <Link className="roundBtn" href="/" aria-label="Назад">←</Link>
+        <div className="tripTitle">
+          <h1>Маршрут</h1>
+          <p className="muted">Карта и маршруты 2ГИС</p>
         </div>
-      </div>
-
-      <section className="routeControls">
-        <label>
-          Откуда
-          <input placeholder="Начальная точка" />
-        </label>
-        <label>
-          Куда
-          <input placeholder="Конечная точка" />
-        </label>
-        <button className="primary" type="button">Построить маршрут</button>
-      </section>
-
-      <div ref={containerRef} className="mapCanvas" />
-
-      <section className="routeHint">
-        <strong>Следующий этап</strong>
-        <p className="muted">
-          Поверх реального маршрута здесь появятся твои контрольные точки:
-          фото-превью, форма, цвет, размер и карточка события.
-        </p>
+      </header>
+      <section className="mapSection">
+        <RoutePlanner trip={trip} onChange={setTrip} />
+        <TripMap trip={trip} />
+        {trip.route && (
+          <button className="primary wide" onClick={saveAsTrip} disabled={saving}>
+            Сохранить как поездку
+          </button>
+        )}
       </section>
     </main>
   );

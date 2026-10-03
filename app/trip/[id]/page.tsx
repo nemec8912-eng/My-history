@@ -7,6 +7,7 @@ import { DestinationCard } from "@/components/story/DestinationCard";
 import { StoryPointModal } from "@/components/story/StoryPointModal";
 import { StoryRoute } from "@/components/story/StoryRoute";
 import { TripMap } from "@/components/map/TripMap";
+import { RoutePlanner } from "@/components/map/RoutePlanner";
 import { Sheet } from "@/components/Sheet";
 import { TripEditor } from "@/components/TripEditor";
 import { MediaImg } from "@/components/media/Media";
@@ -120,6 +121,7 @@ export default function TripPage() {
         </section>
       ) : (
         <section className="mapSection">
+          <RoutePlanner trip={trip} onChange={update} />
           <div className="pickBar">
             <select value={pickFor} onChange={(e) => setPickFor(e.target.value)}>
               <option value="">Поставить точку на карте…</option>
@@ -142,7 +144,6 @@ export default function TripPage() {
               setPickFor("");
             }}
           />
-          <p className="muted small">Построение маршрута по адресам через 2ГИС — следующий шаг.</p>
         </section>
       )}
 

@@ -36,7 +36,7 @@ export function TripMap({
   const el = useRef<HTMLDivElement>(null);
   const api = useRef<{ mapgl: AnyMap; map: AnyMap } | null>(null);
   const objects = useRef<AnyMap[]>([]);
-  const fitted = useRef(false);
+  const fitted = useRef("");
   const handlers = useRef({ onMarkerClick, onMapClick });
   handlers.current = { onMarkerClick, onMapClick };
   const [status, setStatus] = useState<"loading" | "ready" | "nokey" | "error">("loading");
@@ -124,7 +124,8 @@ export function TripMap({
       objects.current.push(marker);
     }
 
-    if (!fitted.current) {
+    const sig = `${trip.route?.builtAt ?? ""}:${located.length}`;
+    if (fitted.current !== sig) {
       const coords: [number, number][] = [
         ...located.map(({ cp }) => [cp.location!.lon, cp.location!.lat] as [number, number]),
         ...(trip.route?.segments.flatMap((s) => s.path.flat()) ?? []),
@@ -138,7 +139,7 @@ export function TripMap({
           { padding: { top: 70, bottom: 70, left: 50, right: 50 } }
         );
       }
-      if (coords.length) fitted.current = true;
+      if (coords.length) fitted.current = sig;
     }
   }, [trip, status]);
 
