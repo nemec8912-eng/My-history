@@ -50,14 +50,20 @@ Trip ── checkpoints[] (порядок массива = порядок пут
 
 Без Supabase всё хранится на устройстве. Чтобы история была одинаковой на всех устройствах:
 
-1. supabase.com → New project.
-2. SQL Editor → вставить `supabase/schema.sql` → Run (создаст таблицы, защиту строк и bucket `media`).
-3. Authentication → Email: включить. В шаблоне письма «Magic Link» добавить код `{{ .Token }}`,
-   чтобы входить по коду (нужно для PWA на iPhone).
-4. Authentication → URL Configuration → Site URL = адрес сайта на Vercel.
-5. Project Settings → API: скопировать `Project URL` и `anon public` ключ в Vercel как
-   `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY` → Redeploy.
-6. В приложении: кнопка «Я» → вход по email → «Перенести в аккаунт».
+1. SQL Editor → выполнить `supabase/schema.sql` (таблицы, правила доступа, bucket `media`).
+2. Authentication → Emails: в шаблоны **Confirm signup** и **Magic Link** добавить строку
+   `Код: {{ .Token }}` — вход идёт по коду (ссылка из письма в PWA на iPhone не работает).
+3. Authentication → URL Configuration: Site URL и Redirect URLs = адрес сайта
+   (например `https://nemec8912-eng.github.io/My-history/`).
+4. Передать сайту адрес и ключ (Project Settings → API: `Project URL`, `anon public`):
+   - GitHub Pages: Settings → Secrets and variables → Actions → **Variables**:
+     `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, затем перезапустить «Deploy to GitHub Pages»;
+   - Vercel / Netlify: те же имена в Environment Variables → Redeploy;
+   - локально: файл `.env.local`.
+5. В приложении: кнопка «Я» → email → код из письма → «Перенести в аккаунт».
+
+`anon`-ключ не секретный: доступ к данным ограничен правилами RLS (каждый видит только свои записи и файлы).
+Встроенная почта Supabase отправляет лишь несколько писем в час — для частых входов подключите свой SMTP.
 
 ## Деплой
 

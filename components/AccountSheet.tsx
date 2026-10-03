@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { syncPendingUploads } from "@/lib/media/store";
 import { localTripCount, migrateLocalToCloud } from "@/lib/repo";
-import { getSupabase, isCloudConfigured } from "@/lib/supabase";
+import { authErrorText, getSupabase, isCloudConfigured, pingCloud } from "@/lib/supabase";
 import { errorText } from "@/lib/useTrip";
 import { Sheet } from "./Sheet";
 import { asset } from "@/lib/routes";
@@ -21,9 +21,11 @@ export function AccountSheet({ onClose, onChanged }: { onClose: () => void; onCh
   const [local, setLocal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [net, setNet] = useState<{ ok: boolean; reason?: string } | null>(null);
 
   useEffect(() => {
     if (!sb) return;
+    pingCloud().then(setNet);
     sb.auth.getSession().then(({ data }) => setUser(data.session?.user.email ?? null));
     localTripCount().then(setLocal);
   }, [sb]);
@@ -52,9 +54,9 @@ export function AccountSheet({ onClose, onChanged }: { onClose: () => void; onCh
       options: { emailRedirectTo: window.location.origin + asset("/"), shouldCreateUser: true },
     });
     setBusy(false);
-    if (error) return setMsg(error.message);
+    if (error) return setMsg(authErrorText(error.message));
     setStage("code");
-    setMsg("Письмо отправлено. Введите код из письма или откройте ссылку.");
+    setMsg("Письмо отправлено. Введите код из письма (проверьте и папку «Спам»).");
   }
 
   async function verify(e: FormEvent) {
@@ -63,7 +65,7 @@ export function AccountSheet({ onClose, onChanged }: { onClose: () => void; onCh
     setMsg(null);
     const { data, error } = await sb!.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
     setBusy(false);
-    if (error) return setMsg(error.message);
+    if (error) return setMsg(authErrorText(error.message));
     setUser(data.user?.email ?? email);
     void syncPendingUploads();
     onChanged();
@@ -93,6 +95,7 @@ export function AccountSheet({ onClose, onChanged }: { onClose: () => void; onCh
     <Sheet onClose={onClose}>
       <div className="editor">
         <p className="eyebrow">Аккаунт</p>
+        {net && !net.ok && <p className="errorBar">{net.reason}. Поездки продолжают сохраняться на этом устройстве.</p>}
         {user ? (
           <>
             <h3>Вы вошли</h3>

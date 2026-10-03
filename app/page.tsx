@@ -10,7 +10,7 @@ import { getSupabase } from "@/lib/supabase";
 import { routes } from "@/lib/routes";
 import { formatDate, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
-import { getRepo, newTrip } from "@/lib/repo";
+import { getRepo, localTripCount, newTrip } from "@/lib/repo";
 import type { Checkpoint, Trip } from "@/lib/types";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -53,11 +53,14 @@ export default function Home() {
 
   const [account, setAccount] = useState(false);
   const [cloud, setCloud] = useState(false);
+  const [pendingLocal, setPendingLocal] = useState(0);
 
   const reload = useCallback(() => {
     getRepo()
       .then((r) => {
         setCloud(r.mode === "cloud");
+        if (r.mode === "cloud") localTripCount().then(setPendingLocal).catch(() => undefined);
+        else setPendingLocal(0);
         return r.list();
       })
       .then(setTrips)
@@ -132,6 +135,12 @@ export default function Home() {
           <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
         </div>
       </section>
+
+      {cloud && pendingLocal > 0 && (
+        <button className="syncBanner" onClick={() => setAccount(true)}>
+          На этом устройстве есть поездки ({pendingLocal}), которых нет в аккаунте. Перенести ›
+        </button>
+      )}
 
       <section className="stats">
         <div><strong>{totals.trips}</strong><span>{plural(totals.trips, "поездка", "поездки", "поездок")}</span></div>
