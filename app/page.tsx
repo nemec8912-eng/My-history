@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { MediaImg, MediaPicker } from "@/components/media/Media";
 import { Sheet } from "@/components/Sheet";
+import { AccountSheet } from "@/components/AccountSheet";
+import { getSupabase } from "@/lib/supabase";
 import { formatDate, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, newTrip } from "@/lib/repo";
@@ -48,12 +50,28 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState({ title: "", date: today(), time: "", place: "", text: "", from: "", to: "", cover: undefined as string | undefined });
 
-  useEffect(() => {
+  const [account, setAccount] = useState(false);
+  const [cloud, setCloud] = useState(false);
+
+  const reload = useCallback(() => {
     getRepo()
-      .then((r) => r.list())
+      .then((r) => {
+        setCloud(r.mode === "cloud");
+        return r.list();
+      })
       .then(setTrips)
       .catch(() => setTrips([]));
   }, []);
+
+  useEffect(() => {
+    reload();
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data } = sb.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") reload();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [reload]);
 
   const totals = useMemo(() => {
     const list = trips ?? [];
@@ -100,7 +118,7 @@ export default function Home() {
           <p className="eyebrow">Личный дневник</p>
           <h1>Моя история</h1>
         </div>
-        <button className="avatar" aria-label="Профиль">Я</button>
+        <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount(true)}>Я</button>
       </header>
 
       <section className="hero">
@@ -160,6 +178,8 @@ export default function Home() {
           </button>
         )}
       </section>
+
+      {account && <AccountSheet onClose={() => setAccount(false)} onChanged={reload} />}
 
       {open && (
         <Sheet onClose={() => setOpen(false)}>

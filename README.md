@@ -18,7 +18,10 @@
   (дом → станция → электричка → … → место назначения). Реальные карты не подключены.
 - **Медиа**: фото сжимаются и хранятся в IndexedDB (не в localStorage), у каждого файла
   свой `media_id`.
-- **PWA**: manifest, иконки, Apple touch icon, standalone, safe areas.
+- **Способ передвижения** на каждом участке (пешком, электричка, метро, автобус, такси…):
+  свой стиль линии и значок посередине участка (`lib/travel.ts`).
+- **Аккаунт** (Supabase, вход по коду из письма) и перенос поездок с устройства в облако.
+- **PWA**: manifest, иконки, Apple touch icon, standalone, safe areas, service worker.
 
 ## Архитектура данных
 
@@ -42,6 +45,19 @@ Trip ── checkpoints[] (порядок массива = порядок пут
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | аккаунт и синхронизация | позже |
 
 Для запуска сейчас переменные не нужны. Реальные ключи в репозиторий не коммитятся (`.env*` в `.gitignore`).
+
+## Аккаунт и синхронизация (Supabase)
+
+Без Supabase всё хранится на устройстве. Чтобы история была одинаковой на всех устройствах:
+
+1. supabase.com → New project.
+2. SQL Editor → вставить `supabase/schema.sql` → Run (создаст таблицы, защиту строк и bucket `media`).
+3. Authentication → Email: включить. В шаблоне письма «Magic Link» добавить код `{{ .Token }}`,
+   чтобы входить по коду (нужно для PWA на iPhone).
+4. Authentication → URL Configuration → Site URL = адрес сайта на Vercel.
+5. Project Settings → API: скопировать `Project URL` и `anon public` ключ в Vercel как
+   `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY` → Redeploy.
+6. В приложении: кнопка «Я» → вход по email → «Перенести в аккаунт».
 
 ## Деплой
 

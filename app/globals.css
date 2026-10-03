@@ -244,3 +244,5 @@ input, textarea, select { font-size: 16px; } /* iOS не зумит поле п�
 .travelBadge { animation: badgeIn .4s ease both; filter: drop-shadow(0 2px 4px rgba(38,32,55,.18)); }
 @keyframes badgeIn { from { opacity:0; } }
 .travelChip { padding:8px 11px; font-size:14px; }
+.avatar { position:relative; }
+.avatar.online::after { content:""; position:absolute; right:1px; bottom:1px; width:11px; height:11px; border-radius:50%; background:#16a36a; border:2px solid #f5f6fb; }

@@ -5,14 +5,13 @@
  */
 import { addMediaFromDataUrl, queueUpload, listLocalMediaIds, syncPendingUploads } from "./media/store";
 import { idb, STORES } from "./media/idb";
-import { createCheckpoint, normalizeOrder } from "./markerStyle";
+import { createCheckpoint, newId, normalizeOrder } from "./markerStyle";
 import { getSupabase, getUserId } from "./supabase";
 import type { Checkpoint, Trip } from "./types";
 
 const LOCAL_KEY = "trips";
 const CACHE_KEY = "trips-cloud-cache";
 const LEGACY_KEY = "my-history-events";
-const MIGRATED_FLAG = "migrated-to-cloud";
 
 export interface TripRepo {
   readonly mode: "local" | "cloud";
@@ -291,15 +290,13 @@ export async function getRepo(): Promise<TripRepo> {
   return localRepo;
 }
 
-/** Есть ли на устройстве данные, ещё не перенесённые в облако. */
-export async function hasLocalDataToMigrate(): Promise<boolean> {
-  if ((await idb.get<boolean>(STORES.kv, MIGRATED_FLAG).catch(() => false)) === true) {
-    return (await readLocal()).length > 0;
-  }
-  return (await readLocal()).length > 0;
+/** Сколько поездок хранится только на этом устройстве (ещё не в аккаунте). */
+export async function localTripCount(): Promise<number> {
+  await migrateLegacy();
+  return (await readLocal()).length;
 }
 
-/** Переносит поездки и медиа с устройства в аккаунт. Локальные данные не удаляются. */
+/** Переносит поездки и медиа с устройства в аккаунт. Копия поездок остаётся в резервной записи на устройстве. */
 export async function migrateLocalToCloud(onProgress?: (msg: string) => void): Promise<number> {
   const userId = await getUserId();
   if (!userId) throw new Error("Сначала войдите в аккаунт");
@@ -317,14 +314,13 @@ export async function migrateLocalToCloud(onProgress?: (msg: string) => void): P
   await syncPendingUploads();
   await writeLocal([], LOCAL_KEY);
   await writeLocal(trips, "trips-before-cloud-backup");
-  await idb.set(STORES.kv, MIGRATED_FLAG, true);
   return n;
 }
 
 export function newTrip(partial: Partial<Trip> = {}): Trip {
   const now = new Date().toISOString();
   return upgradeTrip({
-    id: partial.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now())),
+    id: partial.id ?? newId(),
     title: "Новая поездка",
     date: now.slice(0, 10),
     mediaIds: [],
