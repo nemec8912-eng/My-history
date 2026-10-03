@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CheckpointEditor, withAddedMedia, withRemovedMedia } from "@/components/CheckpointEditor";
 import { MediaGallery, MediaImg, MediaPicker } from "@/components/media/Media";
@@ -9,12 +9,15 @@ import { Sheet } from "@/components/Sheet";
 import { formatDate, formatDuration, minutesOf } from "@/lib/format";
 import { newId } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
+import { routes } from "@/lib/routes";
 import type { Checkpoint, MediaKind, Moment } from "@/lib/types";
 
 type Tab = "image" | "video" | "audio" | "moments";
 
-export default function PlacePage() {
-  const { id, cpId } = useParams<{ id: string; cpId: string }>();
+export function PlaceView() {
+  const params = useSearchParams();
+  const id = params.get("trip") ?? undefined;
+  const cpId = params.get("cp") ?? undefined;
   const { trip, status, update, saving } = useTrip(id);
   const [tab, setTab] = useState<Tab>("image");
   const [edit, setEdit] = useState(false);
@@ -25,7 +28,7 @@ export default function PlacePage() {
   if (!trip || !cp)
     return (
       <main className="shell">
-        <Link className="backLink" href={`/trip/${id}`}>← Назад</Link>
+        <Link className="backLink" href={id ? routes.trip(id) : "/"}>← Назад</Link>
         <p className="muted" style={{ marginTop: 20 }}>Локация не найдена.</p>
       </main>
     );
@@ -57,7 +60,7 @@ export default function PlacePage() {
     <main className="placePage">
       <div className="placeHero" style={{ ["--accent" as string]: cp.style.color }}>
         {cp.coverMediaId ? <MediaImg id={cp.coverMediaId} variant="original" /> : <span className="placeHeroEmpty">★</span>}
-        <Link className="roundBtn floating" href={`/trip/${trip.id}`} aria-label="Назад">←</Link>
+        <Link className="roundBtn floating" href={routes.trip(trip.id)} aria-label="Назад">←</Link>
       </div>
 
       <div className="placeBody">

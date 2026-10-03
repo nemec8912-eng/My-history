@@ -6,6 +6,7 @@ import { localTripCount, migrateLocalToCloud } from "@/lib/repo";
 import { getSupabase, isCloudConfigured } from "@/lib/supabase";
 import { errorText } from "@/lib/useTrip";
 import { Sheet } from "./Sheet";
+import { asset } from "@/lib/routes";
 
 /**
  * Аккаунт: вход по email-коду (работает и в PWA на iPhone, где ссылка из письма
@@ -48,7 +49,7 @@ export function AccountSheet({ onClose, onChanged }: { onClose: () => void; onCh
     setMsg(null);
     const { error } = await sb!.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+      options: { emailRedirectTo: window.location.origin + asset("/"), shouldCreateUser: true },
     });
     setBusy(false);
     if (error) return setMsg(error.message);

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DestinationCard } from "@/components/story/DestinationCard";
 import { StoryPointModal } from "@/components/story/StoryPointModal";
@@ -12,10 +12,11 @@ import { MediaImg } from "@/components/media/Media";
 import { formatDate, formatDuration, minutesOf, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
+import { routes } from "@/lib/routes";
 import type { Checkpoint } from "@/lib/types";
 
-export default function TripPage() {
-  const { id } = useParams<{ id: string }>();
+export function TripView() {
+  const id = useSearchParams().get("id") ?? undefined;
   const router = useRouter();
   const { trip, status, error, saving, update, remove } = useTrip(id);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export default function TripPage() {
     setOpenId(cp.id);
   };
   const openPoint = (cp: Checkpoint) => {
-    if (cp.kind === "end" && cp.place) router.push(`/trip/${trip.id}/place/${cp.id}`);
+    if (cp.kind === "end" && cp.place) router.push(routes.place(trip.id, cp.id));
     else setOpenId(cp.id);
   };
 
@@ -107,7 +108,7 @@ export default function TripPage() {
         {trip.description && <p className="tripDesc">{trip.description}</p>}
         <StoryRoute trip={trip} onOpen={openPoint} />
         <button className="addPointBtn" onClick={addPoint}>+ Добавить точку</button>
-        {end?.place && <DestinationCard cp={end} onOpen={() => router.push(`/trip/${trip.id}/place/${end.id}`)} />}
+        {end?.place && <DestinationCard cp={end} onOpen={() => router.push(routes.place(trip.id, end.id))} />}
       </section>
 
       {openCp && (
@@ -127,7 +128,7 @@ export default function TripPage() {
           }}
           onDelete={deleteCp}
           onMove={moveCp}
-          onOpenPlace={(cid) => router.push(`/trip/${trip.id}/place/${cid}`)}
+          onOpenPlace={(cid) => router.push(routes.place(trip.id, cid))}
         />
       )}
 

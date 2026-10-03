@@ -19,7 +19,10 @@ export function useTrip(id: string | undefined) {
   const queue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setStatus("missing");
+      return;
+    }
     let alive = true;
     setStatus("loading");
     getRepo()

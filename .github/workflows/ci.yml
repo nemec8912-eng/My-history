@@ -29,3 +29,16 @@ jobs:
             echo "::error title=build::$(tail -n 60 build.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
             exit 1
           }
+      - name: Check static export (with base path)
+        env:
+          NEXT_PUBLIC_BASE_PATH: /My-history
+        run: |
+          set -o pipefail
+          rm -rf out .next
+          npm run build 2>&1 | tee build2.log || {
+            echo "::error title=build-basepath::$(tail -n 60 build2.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            exit 1
+          }
+          echo "::notice title=out::$(cd out && find . -maxdepth 2 | sort | head -40 | tr '\n' ' ')"
+          grep -o 'href="[^"]*manifest[^"]*"' out/index.html | head -1 | sed 's/^/::notice title=manifest-link::/'
+          grep -o '"start_url":"[^"]*"' out/manifest.webmanifest | sed 's/^/::notice title=start_url::/' || true

@@ -7,6 +7,7 @@ import { MediaImg, MediaPicker } from "@/components/media/Media";
 import { Sheet } from "@/components/Sheet";
 import { AccountSheet } from "@/components/AccountSheet";
 import { getSupabase } from "@/lib/supabase";
+import { routes } from "@/lib/routes";
 import { formatDate, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, newTrip } from "@/lib/repo";
@@ -85,7 +86,7 @@ export default function Home() {
     setBusy(true);
     try {
       await (await getRepo()).save(trip);
-      router.push(`/trip/${trip.id}`);
+      router.push(routes.trip(trip.id));
     } catch (e) {
       alert("Не удалось сохранить: " + (e instanceof Error ? e.message : String(e)));
       setBusy(false);
@@ -157,7 +158,7 @@ export default function Home() {
             const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
             const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
             return (
-              <Link className="card" key={t.id} href={`/trip/${t.id}`}>
+              <Link className="card" key={t.id} href={routes.trip(t.id)}>
                 <div className="datePill">{formatDate(t.date)}{t.time ? ` · ${t.time}` : ""}</div>
                 <div className="photoPlaceholder">
                   {cover ? <MediaImg id={cover} variant="original" className="coverImg" /> : "Обложка поездки"}
