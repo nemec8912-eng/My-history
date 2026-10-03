@@ -96,7 +96,7 @@ export default function Home() {
             Создай одно событие и добавляй в него все фотографии этой поездки.
           </p>
         </div>
-        <button className="primary" onClick={() => setOpen(true)}>+ Добавить событие</button>
+        <div className="heroActions"><button className="primary" onClick={() => setOpen(true)}>+ Добавить событие</button><a className="secondaryButton" href="/map">Открыть карту маршрута</a></div>
       </section>
 
       <section className="stats">
