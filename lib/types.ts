@@ -40,6 +40,9 @@ export type MarkerStyle = {
 
 export type CheckpointKind = "start" | "end" | "regular";
 
+/** Как добрались до точки от предыдущей. Набор и стили — в lib/travel.ts. */
+export type TravelMode = "walk" | "bike" | "train" | "metro" | "bus" | "tram" | "taxi" | "car" | "plane" | "boat";
+
 /** Мини-событие внутри большой локации («покормили жирафа», «обед в кафе»). */
 export type Moment = {
   id: string;
@@ -69,6 +72,8 @@ export type Checkpoint = {
   style: MarkerStyle;
   /** 0 — обычный этап, 3 — очень важное воспоминание. Значение задаёт пользователь. */
   importance: number;
+  /** Как добрались сюда от предыдущей точки. */
+  arrivedBy?: TravelMode;
   coverMediaId?: MediaId;
   mediaIds: MediaId[];
   /** Если задано — точка является «большой локацией» со своей страницей. */

@@ -143,6 +143,7 @@ type CheckpointRow = {
   location_label: string | null;
   style: Checkpoint["style"];
   importance: number;
+  arrived_by: Checkpoint["arrivedBy"] | null;
   cover_media_id: string | null;
   media_ids: string[] | null;
   place: Checkpoint["place"] | null;
@@ -180,6 +181,7 @@ function toCheckpointRow(c: Checkpoint, tripId: string, ownerId: string, positio
     location_label: c.location?.label ?? null,
     style: c.style,
     importance: c.importance,
+    arrived_by: c.arrivedBy ?? null,
     cover_media_id: c.coverMediaId ?? null,
     media_ids: c.mediaIds,
     place: c.place ?? null,
@@ -214,6 +216,7 @@ function fromRows(t: TripRow, cps: CheckpointRow[]): Trip {
             : undefined,
         style: c.style,
         importance: c.importance,
+        arrivedBy: c.arrived_by ?? undefined,
         coverMediaId: c.cover_media_id ?? undefined,
         mediaIds: c.media_ids ?? [],
         place: c.place ?? undefined,

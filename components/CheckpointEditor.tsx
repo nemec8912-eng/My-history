@@ -5,6 +5,7 @@ import { PALETTE, SHAPES, SHAPE_IDS, SIZES, SIZE_IDS, safeColor } from "@/lib/ma
 import type { Checkpoint, MediaItem } from "@/lib/types";
 import { MediaGallery, MediaPicker } from "./media/Media";
 import { PointMarker } from "./PointMarker";
+import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
 const ICONS = ["", "🏠", "🚉", "🚆", "🚇", "🚌", "🚕", "🚗", "🚶", "🔁", "☕", "🍽", "📷", "🌳", "🎡", "🐘", "🏛", "⭐", "❤️", "🎉"];
 const IMPORTANCE = ["Обычная", "Заметная", "Важная", "Главная"];
@@ -56,6 +57,24 @@ export function CheckpointEditor({
           <strong>{cp.title || "Без названия"}</strong>
         </div>
       </div>
+
+      {cp.kind !== "start" && (
+        <fieldset>
+          <legend>Как добрались сюда</legend>
+          <div className="chips">
+            {TRAVEL_IDS.map((m) => (
+              <button
+                type="button"
+                key={m}
+                className={`chip travelChip ${cp.arrivedBy === m ? "on" : ""}`}
+                onClick={() => set({ arrivedBy: cp.arrivedBy === m ? undefined : m })}
+              >
+                <span aria-hidden>{TRAVEL[m].icon}</span> {TRAVEL[m].label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <label>
         Название

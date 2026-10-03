@@ -1,14 +1,29 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { safeColor } from "@/lib/markerStyle";
 import type { StoryLayout } from "@/lib/storyLayout";
+import { DEFAULT_LINE, TRAVEL } from "@/lib/travel";
 
 /** Извилистая линия маршрута: градиент между цветами соседних точек + плавное «прорисовывание». */
 export function StoryRoutePath({ layout }: { layout: StoryLayout }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const maskPath = useRef<SVGPathElement>(null);
   const animated = useRef(false);
+  const segRefs = useRef<(SVGPathElement | null)[]>([]);
+  const [mids, setMids] = useState<{ x: number; y: number }[]>([]);
+
+  // Середины участков — там стоит значок способа передвижения.
+  useEffect(() => {
+    setMids(
+      layout.segments.map((_, i) => {
+        const p = segRefs.current[i];
+        if (!p) return { x: 0, y: 0 };
+        const pt = p.getPointAtLength(p.getTotalLength() / 2);
+        return { x: pt.x, y: pt.y };
+      })
+    );
+  }, [layout]);
 
   useEffect(() => {
     const p = maskPath.current;
@@ -60,21 +75,43 @@ export function StoryRoutePath({ layout }: { layout: StoryLayout }) {
         </mask>
       </defs>
       <g mask={`url(#${uid}m)`}>
-        {layout.segments.map((s, i) => (
-          <g key={s.id}>
-            <path d={s.d} fill="none" stroke={`url(#${uid}g${i})`} strokeWidth="14" strokeOpacity="0.12" strokeLinecap="round" />
-            <path d={s.d} fill="none" stroke={`url(#${uid}g${i})`} strokeWidth="2" strokeOpacity="0.35" strokeLinecap="round" />
-            <path
-              d={s.d}
-              fill="none"
-              stroke={`url(#${uid}g${i})`}
-              strokeWidth="5.5"
-              strokeLinecap="round"
-              strokeDasharray="0.1 11"
-            />
-          </g>
-        ))}
+        {layout.segments.map((s, i) => {
+          const line = s.mode ? TRAVEL[s.mode].line : DEFAULT_LINE;
+          const solid = !line.dash;
+          return (
+            <g key={s.id}>
+              <path d={s.d} fill="none" stroke={`url(#${uid}g${i})`} strokeWidth={solid ? 16 : 14} strokeOpacity="0.12" strokeLinecap="round" />
+              {!solid && (
+                <path d={s.d} fill="none" stroke={`url(#${uid}g${i})`} strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
+              )}
+              <path
+                ref={(el) => {
+                  segRefs.current[i] = el;
+                }}
+                d={s.d}
+                fill="none"
+                stroke={`url(#${uid}g${i})`}
+                strokeWidth={line.width}
+                strokeLinecap="round"
+                strokeDasharray={line.dash}
+              />
+              {s.mode === "train" || s.mode === "metro" ? (
+                <path d={s.d} fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="1.6" strokeDasharray="5 7" />
+              ) : null}
+            </g>
+          );
+        })}
       </g>
+      {layout.segments.map((s, i) =>
+        s.mode && mids[i] && mids[i].y ? (
+          <g key={`b-${s.id}`} className="travelBadge" transform={`translate(${mids[i].x} ${mids[i].y})`} style={{ animationDelay: `${0.6 + i * 0.08}s` }}>
+            <circle r="15" fill="#fff" stroke={safeColor(s.colorB)} strokeWidth="2" />
+            <text textAnchor="middle" dominantBaseline="central" fontSize="15">
+              {TRAVEL[s.mode].icon}
+            </text>
+          </g>
+        ) : null
+      )}
     </svg>
   );
 }

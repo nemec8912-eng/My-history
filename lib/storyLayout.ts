@@ -35,6 +35,8 @@ export type StorySegment = {
   y2: number;
   colorA: string;
   colorB: string;
+  /** Способ передвижения на этом участке. */
+  mode?: Checkpoint["arrivedBy"];
 };
 
 export type StoryLayout = {
@@ -214,6 +216,7 @@ export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint
       y2: b.y,
       colorA: a.cp.style.color,
       colorB: b.cp.style.color,
+      mode: b.cp.arrivedBy,
     });
   }
 

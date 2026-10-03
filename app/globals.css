@@ -241,3 +241,6 @@ input, textarea, select { font-size: 16px; } /* iOS не зумит поле п�
 .momentCard { display:flex; gap:12px; align-items:center; text-align:left; border:0; background:#fff; border-radius:18px; padding:10px; color:inherit; box-shadow:0 6px 18px rgba(48,42,83,.06); }
 .momentThumb { width:64px; height:64px; border-radius:12px; object-fit:cover; flex:none; }
 .momentText { display:grid; gap:2px; min-width:0; }
+.travelBadge { animation: badgeIn .4s ease both; filter: drop-shadow(0 2px 4px rgba(38,32,55,.18)); }
+@keyframes badgeIn { from { opacity:0; } }
+.travelChip { padding:8px 11px; font-size:14px; }
