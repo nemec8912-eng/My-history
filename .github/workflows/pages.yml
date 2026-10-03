@@ -67,6 +67,7 @@ jobs:
           OUT_DIR: live
         run: |
           sleep 20
+          node e2e/cloud.mjs || true
           node e2e/screens.mjs
       - name: Publish screenshots to ci-screens branch
         run: |

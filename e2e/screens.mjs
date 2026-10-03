@@ -18,6 +18,14 @@ async function run(name, browserType, device) {
   try {
     await page.goto(BASE + "/", { waitUntil: "networkidle" });
     await shot("1-home");
+    await page.getByRole("button", { name: "Аккаунт" }).click();
+    await page.waitForTimeout(3000);
+    await shot("1b-account");
+    const err = await page.locator(".sheet .errorBar").textContent().catch(() => null);
+    const title = await page.locator(".sheet h3").first().textContent().catch(() => null);
+    log.push(`[${name}] account: title=${title} error=${err}`);
+    await page.locator(".sheetClose").click();
+    await page.waitForTimeout(400);
     await page.getByRole("button", { name: "Открыть пример" }).click();
     await page.waitForURL(/\/trip\/\?id=/, { timeout: 15000 });
     await page.waitForTimeout(3500);
@@ -61,5 +69,5 @@ async function run(name, browserType, device) {
 if (!ONLY || ONLY.includes("iphone")) await run("iphone", webkit, devices["iPhone 13"]);
 if (!ONLY || ONLY.includes("android")) await run("android", chromium, devices["Pixel 7"]);
 if (!ONLY || ONLY.includes("desktop")) await run("desktop", chromium, { viewport: { width: 1280, height: 860 } });
-fs.writeFileSync(`${OUT}/log.txt`, log.join("\n") + "\n");
+fs.appendFileSync(`${OUT}/log.txt`, log.join("\n") + "\n");
 console.log(log.join("\n"));
