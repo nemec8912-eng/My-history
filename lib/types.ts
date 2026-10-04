@@ -174,4 +174,6 @@ export type MediaItem = {
   createdAt: string;
   /** Оригинал хранится на Google Диске (только локальная пометка). */
   drive?: boolean;
+  /** Длительность видео/аудио, сек. */
+  duration?: number;
 };

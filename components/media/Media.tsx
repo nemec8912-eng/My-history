@@ -21,13 +21,21 @@ export function MediaImg({
   return <img src={url} alt={alt} className={className} loading="lazy" draggable={false} />;
 }
 
-function VideoThumb({ id }: { id: string }) {
+export function fmtDur(sec?: number) {
+  if (!sec) return "";
+  const m = Math.floor(sec / 60);
+  const s = String(sec % 60).padStart(2, "0");
+  return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+export function VideoThumb({ id, duration }: { id: string; duration?: number }) {
   // Сначала кадр-обложка (лёгкий); сам ролик загружается только при открытии.
   const poster = useMediaUrl(id, "thumb");
   return (
     <span className="videoThumb">
       {poster ? <img src={poster} alt="" loading="lazy" /> : <span className="imgPlaceholder videoPh">🎬</span>}
       <span className="playBadge">▶</span>
+      {duration ? <span className="durBadge">{fmtDur(duration)}</span> : null}
     </span>
   );
 }
@@ -174,7 +182,7 @@ export function MediaGallery({
         <div className="mediaGrid">
           {shown.map((m, idx) => (
             <button type="button" key={m.id} className="mediaCell" onClick={() => setOpen(idx)}>
-              {m.kind === "video" ? <VideoThumb id={m.id} /> : <MediaImg id={m.id} />}
+              {m.kind === "video" ? <VideoThumb id={m.id} duration={m.duration} /> : <MediaImg id={m.id} />}
               {rest > 0 && idx === shown.length - 1 && <span className="moreBadge">+{rest}</span>}
             </button>
           ))}

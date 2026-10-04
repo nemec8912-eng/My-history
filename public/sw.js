@@ -1,8 +1,8 @@
 /* Service worker «Моя история»: приложение открывается без сети.
    Данные поездок и фото хранятся в IndexedDB, здесь кэшируется только оболочка сайта. */
-const CACHE = "my-history-v2";
+const CACHE = "my-history-v3";
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, "");
-const PAGES = ["/", "/trip/", "/place/"].map((p) => BASE + p);
+const PAGES = ["/", "/trip/", "/place/", "/moment/", "/new/", "/map/", "/timeline/", "/photos/", "/videos/", "/search/", "/me/"].map((p) => BASE + p);
 const PRECACHE = [...PAGES, BASE + "/icons/icon-192.png", BASE + "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {

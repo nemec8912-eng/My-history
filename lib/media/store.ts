@@ -109,6 +109,29 @@ function videoPoster(file: Blob): Promise<Blob | null> {
   });
 }
 
+/** Длительность видео или аудио (сек), если браузер может её прочитать. */
+function mediaDuration(file: Blob, kind: MediaKind): Promise<number | undefined> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const el = document.createElement(kind === "audio" ? "audio" : "video");
+    const done = (d?: number) => {
+      URL.revokeObjectURL(url);
+      resolve(d && Number.isFinite(d) ? Math.round(d) : undefined);
+    };
+    const t = setTimeout(() => done(), 6000);
+    el.preload = "metadata";
+    el.onloadedmetadata = () => {
+      clearTimeout(t);
+      done(el.duration);
+    };
+    el.onerror = () => {
+      clearTimeout(t);
+      done();
+    };
+    el.src = url;
+  });
+}
+
 /* ───────────── Облако (Supabase Storage как первый провайдер) ───────────── */
 
 async function getPending(): Promise<MediaId[]> {
@@ -327,6 +350,7 @@ export async function addMedia(file: File): Promise<MediaItem> {
   let height: number | undefined;
 
   if (kind === "video") thumb = await videoPoster(file).catch(() => null);
+  const duration = kind === "image" ? undefined : await mediaDuration(file, kind).catch(() => undefined);
   if (kind === "image") {
     try {
       const p = await processImage(file);
@@ -358,6 +382,7 @@ export async function addMedia(file: File): Promise<MediaItem> {
     width,
     height,
     createdAt: new Date().toISOString(),
+    ...(duration ? { duration } : {}),
     ...(drive ? { drive: true } : {}),
   };
   await idb.set(STORES.meta, id, meta);

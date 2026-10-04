@@ -650,3 +650,37 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .nmLabel .ic { color: var(--muted); }
 .nmValue { color: var(--muted); font-size: 14px; text-align: right; }
 .nmBottomSave { margin-top: 16px; }
+
+/* Моменты: хронология, фото, видео */
+.segTabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--line); margin-bottom: 14px; }
+.segTabs a { text-align: center; text-decoration: none; padding: 10px; border-radius: 10px; color: var(--muted); font-weight: 700; min-height: 40px; }
+.segTabs a.on { background: var(--accent); color: #fff; }
+.filterTabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; scrollbar-width: none; }
+.filterTabs::-webkit-scrollbar { display: none; }
+.filterTabs button { flex: 1; min-width: 74px; border: 1px solid var(--line); background: var(--card-solid); color: #c4cbdb; border-radius: 12px; padding: 10px 12px; font-weight: 700; min-height: 42px; }
+.filterTabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.timeline2 { position: relative; padding-left: 26px; }
+.timeline2::before { content: ""; position: absolute; left: 9px; top: 12px; bottom: 0; width: 3px; border-radius: 3px; background: linear-gradient(180deg, var(--accent), rgba(47,123,255,.15)); }
+.tlSection { margin-bottom: 18px; }
+.tlYear { position: relative; display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.tlYear h2 { font-size: 26px; letter-spacing: -.02em; }
+.tlYearDot { position: absolute; left: -26px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px rgba(47,123,255,.25); }
+.tlMonth { margin-bottom: 8px; }
+.tlMonthLabel { font-weight: 800; font-size: 15px; margin: 10px 0 6px; }
+.tlTrip { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; margin-bottom: 8px; border-radius: 16px; background: var(--card-solid); border: 1px solid var(--line); text-decoration: none; color: var(--text); }
+.tlDot { position: absolute; left: -22px; top: 50%; width: 11px; height: 11px; margin-top: -5px; border-radius: 50%; background: #0a0d14; border: 3px solid var(--accent); }
+.tlText { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 13px; }
+.tlText strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tlText span { color: #c4cbdb; }
+.tlThumb { width: 96px; height: 64px; flex: none; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: #1a2130; font-size: 22px; }
+.tlThumb img, .tlThumb .imgPlaceholder { width: 100%; height: 100%; object-fit: cover; }
+.photoGroup { margin-bottom: 16px; }
+.pgLabel { display: block; text-decoration: none; color: var(--accent2); font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+.photoGroup .mediaGrid, .videosPage .mediaGrid { gap: 3px; }
+.photoGroup .mediaCell, .videosPage .mediaCell { border-radius: 4px; }
+.momentGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.momentTile { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; text-decoration: none; color: #fff; }
+.momentTile img, .momentTile .imgPlaceholder { width: 100%; height: 100%; object-fit: cover; }
+.momentTile span { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 8px; font-weight: 700; font-size: 13px; background: linear-gradient(180deg, transparent, rgba(0,0,0,.75)); }
+.durBadge { position: absolute; left: 6px; bottom: 6px; font-size: 11px; font-weight: 800; color: #fff; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.6); }
+.videoThumb .playBadge { width: 30px; height: 30px; font-size: 11px; inset: auto; left: 6px; top: 6px; margin: 0; }
