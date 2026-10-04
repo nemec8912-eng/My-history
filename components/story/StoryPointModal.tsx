@@ -20,6 +20,8 @@ export function StoryPointModal({
   onSave,
   onDelete,
   onMove,
+  onSetStart,
+  onSetEnd,
   onOpenPlace,
   onNavigate,
   defaultDate,
@@ -33,6 +35,8 @@ export function StoryPointModal({
   onSave: (cp: Checkpoint) => void;
   onDelete: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
+  onSetStart: (id: string) => void;
+  onSetEnd: (id: string) => void;
   onOpenPlace: (id: string) => void;
   onNavigate: (index: number) => void;
 }) {
@@ -127,6 +131,16 @@ export function StoryPointModal({
           </div>
 
           <div className="editorActions">
+            {cp.kind !== "start" && (
+              <button type="button" className="softBtn" onClick={() => onSetStart(cp.id)}>
+                Сделать стартом
+              </button>
+            )}
+            {cp.kind !== "end" && (
+              <button type="button" className="softBtn" onClick={() => onSetEnd(cp.id)}>
+                Сделать финишем
+              </button>
+            )}
             {cp.place && (
               <button type="button" className="softBtn" onClick={() => onOpenPlace(cp.id)}>
                 Открыть локацию ›
