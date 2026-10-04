@@ -77,7 +77,7 @@ export function createCheckpoint(kind: CheckpointKind, partial: Partial<Checkpoi
   return {
     id: newId(),
     kind,
-    title: kind === "start" ? "Начало пути" : kind === "end" ? "Конечная точка" : "Новая точка",
+    title: kind === "start" ? "Начало пути" : kind === "end" ? "Конечная точка" : "",
     style: defaultStyle(kind),
     importance: kind === "regular" ? 0 : 2,
     mediaIds: [],
