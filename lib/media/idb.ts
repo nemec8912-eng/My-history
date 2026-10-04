@@ -46,9 +46,27 @@ function run<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore)
   );
 }
 
+/**
+ * Запись, которая считается выполненной только после фиксации транзакции (oncomplete):
+ * для большого видео важно знать, что копия действительно на диске, а не просто принята в очередь.
+ */
+function putDurable(store: string, key: string, value: unknown): Promise<void> {
+  return openDb().then(
+    (db) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(store, "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error ?? new Error("Запись в IndexedDB отменена"));
+        tx.onerror = () => reject(tx.error ?? new Error("Ошибка записи в IndexedDB"));
+        tx.objectStore(store).put(value, key);
+      })
+  );
+}
+
 export const idb = {
   get: <T>(store: string, key: string) => run<T | undefined>(store, "readonly", (s) => s.get(key)),
   set: (store: string, key: string, value: unknown) => run<IDBValidKey>(store, "readwrite", (s) => s.put(value, key)),
+  setDurable: putDurable,
   del: (store: string, key: string) => run<undefined>(store, "readwrite", (s) => s.delete(key)),
   keys: (store: string) => run<IDBValidKey[]>(store, "readonly", (s) => s.getAllKeys()),
 };

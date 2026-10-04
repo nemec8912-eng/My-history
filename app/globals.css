@@ -694,3 +694,25 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .mapPickerCanvas { position: relative; z-index: 0; isolation: isolate; transform: translateZ(0); -webkit-mask-image: -webkit-radial-gradient(white, black); height: 240px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #10141d; }
 .lmPin.pick { background: transparent; border: 0; box-shadow: none; font-size: 30px; }
 .pillBtn .ic { vertical-align: -3px; margin-right: 2px; }
+
+/* Загрузка видео: состояние и реальный прогресс */
+.nmPreview .videoThumb { width: 100%; height: 100%; }
+.uploadList { display: grid; gap: 8px; flex-basis: 100%; width: 100%; }
+.uploadStatus { display: grid; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--card, rgba(255,255,255,.06)); border: 1px solid var(--line, rgba(255,255,255,.1)); color: var(--text, inherit); font-size: 14px; }
+.uploadStatus.bad { background: rgba(239,59,74,.12); border-color: rgba(239,59,74,.35); }
+.uploadStatus.ok { background: rgba(22,163,106,.14); border-color: rgba(22,163,106,.35); }
+.usText { display: grid; gap: 2px; }
+.usText strong { font-weight: 750; font-variant-numeric: tabular-nums; }
+.usText span { color: var(--muted, #8b93a7); font-size: 13px; font-variant-numeric: tabular-nums; }
+.usText .usWarn { color: #ffd46b; }
+.usBar { position: relative; height: 6px; border-radius: 3px; background: rgba(127,140,170,.25); overflow: hidden; }
+.usBar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent, #2f7bff); transition: width .25s linear; }
+.usBar.ind i { width: 35%; animation: usSlide 1.2s ease-in-out infinite; }
+@keyframes usSlide { from { left: -35%; } to { left: 100%; } }
+.usBtn { justify-self: start; border: 0; border-radius: 12px; padding: 9px 16px; min-height: 40px; background: var(--accent, #2f7bff); color: #fff; font-weight: 800; }
+.usBtn:disabled { opacity: .6; }
+.upBadge { position: absolute; right: 6px; top: 6px; min-width: 34px; padding: 3px 6px 5px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.upBadge i { position: absolute; left: 0; bottom: 0; height: 2px; background: #5c9dff; }
+.upBadge.bad { background: #d6293b; }
+.upBadge.ok { background: #16a36a; }
+@media (prefers-reduced-motion: reduce) { .usBar.ind i { animation: none; width: 100%; opacity: .5; } }

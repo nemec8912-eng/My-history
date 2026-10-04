@@ -196,7 +196,7 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
   if (res.status === 401) {
     ls()?.removeItem(LS_TOKEN);
     emit();
-    throw new Error("Доступ к Google Диску истёк — подключите снова");
+    throw new Error(DRIVE_EXPIRED_MESSAGE);
   }
   return res;
 }
@@ -220,8 +220,15 @@ async function ensureFolder(token: string): Promise<string> {
   return id!;
 }
 
-/** Загружает файл в папку «Моя история» (возобновляемая загрузка — подходит и для больших видео). */
-export async function uploadToDrive(blob: Blob, name: string, mime: string, appProperties: Record<string, string>): Promise<{ fileId: string; size: number }> {
+/** Сообщение api() при истёкшем токене — по нему store отличает «нужен вход» от сетевой ошибки. */
+export const DRIVE_EXPIRED_MESSAGE = "Доступ к Google Диску истёк — подключите снова";
+
+/**
+ * Создаёт сессию возобновляемой загрузки и возвращает её адрес (живёт около недели).
+ * Сами байты по этому адресу отправляются без токена, поэтому истечение токена
+ * посреди загрузки большого видео её не прерывает.
+ */
+export async function createDriveSession(name: string, mime: string, size: number, appProperties: Record<string, string>, retried = false): Promise<string> {
   const token = getDriveToken();
   if (!token) throw new Error("NO_TOKEN");
   const folder = await ensureFolder(token);
@@ -230,13 +237,24 @@ export async function uploadToDrive(blob: Blob, name: string, mime: string, appP
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
       "X-Upload-Content-Type": mime || "application/octet-stream",
-      "X-Upload-Content-Length": String(blob.size),
+      "X-Upload-Content-Length": String(size),
     },
     body: JSON.stringify({ name, parents: [folder], appProperties }),
   });
+  if (init.status === 404 && !retried && ls()?.getItem(LS_FOLDER)) {
+    // Папку удалили на Диске — создаём заново и пробуем ещё раз.
+    ls()?.removeItem(LS_FOLDER);
+    return createDriveSession(name, mime, size, appProperties, true);
+  }
   if (!init.ok) throw new Error(`Google Диск: ошибка ${init.status}`);
   const location = init.headers.get("Location");
   if (!location) throw new Error("Google Диск не вернул адрес загрузки");
+  return location;
+}
+
+/** Загружает файл в папку «Моя история» одним запросом (фото и голосовые; видео — см. store.uploadVideo). */
+export async function uploadToDrive(blob: Blob, name: string, mime: string, appProperties: Record<string, string>): Promise<{ fileId: string; size: number }> {
+  const location = await createDriveSession(name, mime, blob.size, appProperties);
   const put = await fetch(location, { method: "PUT", headers: { "Content-Type": mime || "application/octet-stream" }, body: blob });
   if (!put.ok) throw new Error(`Google Диск: загрузка не удалась (${put.status})`);
   const data = await put.json();

@@ -1,9 +1,12 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { addMedia, addMediaFiles } from "@/lib/media/store";
+import { connectDrive } from "@/lib/media/gdrive";
+import { addMedia, addMediaFiles, retryUpload } from "@/lib/media/store";
+import { notePickerOpened } from "@/lib/media/timing";
+import { fmtSize, percentOf } from "@/lib/media/uploadState";
 import type { MediaItem, MediaKind } from "@/lib/types";
-import { useMediaMetas, useMediaUrl } from "./useMedia";
+import { useMediaMetas, useMediaUrl, useUpload } from "./useMedia";
 
 export function MediaImg({
   id,
@@ -36,7 +39,124 @@ export function VideoThumb({ id, duration }: { id: string; duration?: number }) 
       {poster ? <img src={poster} alt="" loading="lazy" /> : <span className="imgPlaceholder videoPh">🎬</span>}
       <span className="playBadge">▶</span>
       {duration ? <span className="durBadge">{fmtDur(duration)}</span> : null}
+      <UploadBadge id={id} />
     </span>
+  );
+}
+
+/** Маленькая метка на плитке видео: «27 %», «!» при ошибке, «✓» по завершении. */
+function UploadBadge({ id }: { id: string }) {
+  const s = useUpload(id);
+  if (!s) return null;
+  const bad = s.phase === "error" || s.phase === "waiting-auth";
+  const text =
+    s.phase === "done" ? "✓" : bad ? "!" : s.phase === "uploading" || s.phase === "retrying" ? (s.indeterminate ? "↑" : `${percentOf(s)}%`) : "…";
+  return (
+    <span className={`upBadge ${bad ? "bad" : s.phase === "done" ? "ok" : ""}`} aria-label="Состояние загрузки">
+      {text}
+      {!bad && s.phase !== "done" && !s.indeterminate && <i style={{ width: `${percentOf(s)}%` }} />}
+    </span>
+  );
+}
+
+/** Подробная строка состояния загрузки видео с реальным процентом и действиями. */
+export function UploadStatus({ id }: { id: string }) {
+  const s = useUpload(id);
+  const [busy, setBusy] = useState(false);
+  if (!s) return null;
+  const pct = percentOf(s);
+  const sizes = s.total ? `Загружено ${fmtSize(s.loaded)} из ${fmtSize(s.total)}` : "";
+  let title: string;
+  let detail: string | null = null;
+  let bar: "progress" | "indeterminate" | "none" = "none";
+  switch (s.phase) {
+    case "preparing":
+      title = "Подготовка видео…";
+      bar = "indeterminate";
+      break;
+    case "queued":
+      title = "Ожидает загрузки…";
+      detail = s.total ? `Размер ${fmtSize(s.total)}` : null;
+      bar = "indeterminate";
+      break;
+    case "uploading":
+      if (s.indeterminate) {
+        title = "Загрузка видео…";
+        bar = "indeterminate";
+      } else {
+        title = `Загрузка видео — ${pct}%`;
+        detail = sizes;
+        bar = "progress";
+      }
+      break;
+    case "retrying":
+      title = "Связь прервалась. Повторная попытка…";
+      detail = s.total ? `${sizes} — ${pct}%` : null;
+      bar = "progress";
+      break;
+    case "waiting-net":
+      title = "Нет интернета. Загрузка продолжится автоматически";
+      detail = s.total ? `${sizes} — ${pct}%` : null;
+      bar = "progress";
+      break;
+    case "waiting-auth":
+      title = s.message ?? "Нужно снова подключить Google Диск";
+      break;
+    case "waiting-account":
+      title = s.message ?? "Видео сохранено на телефоне";
+      break;
+    case "done":
+      title = s.message ?? "Видео загружено";
+      break;
+    default:
+      title = s.message ?? "Не удалось загрузить видео";
+  }
+  const isError = s.phase === "error";
+  return (
+    <div className={`uploadStatus ${isError || s.phase === "waiting-auth" ? "bad" : s.phase === "done" ? "ok" : ""}`} role="status" aria-live="polite">
+      <div className="usText">
+        <strong>{s.phase === "done" ? "✓ " : ""}{title}</strong>
+        {detail && <span>{detail}</span>}
+        {s.localFailed && s.phase !== "done" && <span className="usWarn">Не закрывайте приложение до окончания загрузки</span>}
+      </div>
+      {bar !== "none" && (
+        <div className={`usBar ${bar === "indeterminate" ? "ind" : ""}`}>
+          <i style={bar === "progress" ? { width: `${pct}%` } : undefined} />
+        </div>
+      )}
+      {(isError || s.phase === "waiting-auth") && (
+        <button
+          type="button"
+          className="usBtn"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              if (s.phase === "waiting-auth") await connectDrive();
+              await retryUpload(id);
+            } catch {
+              /* окно входа закрыто — кнопка останется */
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {s.phase === "waiting-auth" ? "Подключить" : "Повторить"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Список состояний загрузки для набора файлов (показывает только видео в процессе). */
+export function UploadStatusList({ ids }: { ids: string[] }) {
+  if (!ids.length) return null;
+  return (
+    <div className="uploadList">
+      {ids.map((id) => (
+        <UploadStatus key={id} id={id} />
+      ))}
+    </div>
   );
 }
 
@@ -264,6 +384,7 @@ export function MediaPicker({
   compact?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [videoIds, setVideoIds] = useState<string[]>([]);
 
   async function handle(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -271,7 +392,10 @@ export function MediaPicker({
     if (!files.length) return;
     setBusy(true);
     try {
-      onAdd(await addMediaFiles(files));
+      const items = await addMediaFiles(files);
+      const vids = items.filter((i) => i.kind === "video").map((i) => i.id);
+      if (vids.length) setVideoIds((v) => [...v, ...vids]);
+      onAdd(items);
     } catch (err) {
       alert("Не удалось сохранить файл: " + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -290,7 +414,7 @@ export function MediaPicker({
       {kinds.includes("video") && (
         <label className="pickBtn">
           + Видео
-          <input type="file" accept="video/*" multiple onChange={handle} />
+          <input type="file" accept="video/*" multiple onChange={handle} onClick={notePickerOpened} />
         </label>
       )}
       {kinds.includes("audio") && (
@@ -303,6 +427,7 @@ export function MediaPicker({
         </>
       )}
       {busy && <span className="muted small">Сохраняю…</span>}
+      <UploadStatusList ids={videoIds} />
     </div>
   );
 }

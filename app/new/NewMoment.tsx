@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
-import { MediaImg, MediaPicker } from "@/components/media/Media";
+import { MediaImg, MediaPicker, UploadStatusList, VideoThumb } from "@/components/media/Media";
 import { PlacePicker } from "@/components/PlacePicker";
 import { addMediaFiles } from "@/lib/media/store";
+import { notePickerOpened } from "@/lib/media/timing";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, newTrip } from "@/lib/repo";
 import { routes } from "@/lib/routes";
@@ -131,6 +132,8 @@ export function NewMoment() {
 
   const accept = type === "video" ? "video/*" : "image/*";
   const preview = media.find((m) => m.kind !== "audio");
+  const videoIds = media.filter((m) => m.kind === "video").map((m) => m.id);
+  const onPickerClick = type === "video" ? notePickerOpened : undefined;
 
   return (
     <main className="newMoment">
@@ -157,7 +160,7 @@ export function NewMoment() {
         <div className="nmMedia">
           {preview ? (
             <div className="nmPreview">
-              <MediaImg id={preview.id} variant="original" />
+              {preview.kind === "video" ? <VideoThumb id={preview.id} duration={preview.duration} /> : <MediaImg id={preview.id} variant="original" />}
               <button
                 className="nmRemove"
                 aria-label="Убрать"
@@ -170,16 +173,18 @@ export function NewMoment() {
           ) : (
             <label className="nmDrop">
               <Icon name={type === "video" ? "video" : "photo"} size={34} />
-              <span>{busyMedia ? "Сохраняю…" : type === "video" ? "Выбрать или снять видео" : "Выбрать или сделать фото"}</span>
-              <input type="file" accept={accept} multiple onChange={pick} />
+              <span>{busyMedia ? (type === "video" ? "Подготовка видео…" : "Сохраняю…") : type === "video" ? "Выбрать или снять видео" : "Выбрать или сделать фото"}</span>
+              <input type="file" accept={accept} multiple onChange={pick} onClick={onPickerClick} />
             </label>
           )}
           {preview && (
             <label className="pickBtn">
               + Ещё
-              <input type="file" accept={accept} multiple onChange={pick} />
+              <input type="file" accept={accept} multiple onChange={pick} onClick={onPickerClick} />
             </label>
           )}
+          {busyMedia && preview && <p className="muted small">{type === "video" ? "Подготовка видео…" : "Сохраняю…"}</p>}
+          <UploadStatusList ids={videoIds} />
         </div>
       )}
 
