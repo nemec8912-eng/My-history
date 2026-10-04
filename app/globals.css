@@ -352,3 +352,59 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .tripRowChevron { color: #6f6b8e; font-size: 24px; font-weight: 700; }
 .storyCard.mini .storyCardTitle { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .destCover { background: linear-gradient(150deg, #3a2a7a, #1a1533); }
+
+/* ═════════ Премиальные карточки ═════════ */
+.storyCard.premium {
+  position: absolute; overflow: hidden; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 20px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--pc) 16%, rgba(32,28,60,.92)), rgba(22,19,42,.92));
+  border: 1px solid color-mix(in srgb, var(--pc) 28%, rgba(255,255,255,.06));
+  box-shadow: 0 14px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.02) inset, 0 0 24px color-mix(in srgb, var(--pc) 16%, transparent);
+}
+.storyCard.premium.left { padding: 10px 14px 10px 10px; }
+.storyCard.premium.important { box-shadow: 0 14px 34px rgba(0,0,0,.45), 0 0 34px color-mix(in srgb, var(--pc) 32%, transparent); }
+.scAccent { position: absolute; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--pc); left: 6px; box-shadow: 0 0 10px var(--pc); }
+.storyCard.premium.left .scAccent { left: auto; right: 6px; }
+.scTop { display: flex; align-items: center; gap: 6px; }
+.scNum { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 8px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 900; color: #fff; background: var(--pc); box-shadow: 0 0 12px color-mix(in srgb, var(--pc) 50%, transparent); }
+.scTime { font-size: 12px; font-weight: 800; color: #d9ccff; background: rgba(255,255,255,.07); padding: 3px 7px; border-radius: 8px; }
+.scStar { color: #ffcf4a; font-size: 14px; text-shadow: 0 0 8px rgba(255,207,74,.6); }
+.storyCard.premium .storyCardTitle { font-size: 15px; margin-top: 2px; }
+.scMeta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 3px; }
+.scTag { font-size: 11px; font-weight: 700; color: #cfc6f5; background: rgba(255,255,255,.06); padding: 2px 7px; border-radius: 7px; }
+.mediaCounts { display: inline-flex; gap: 7px; font-size: 11px; font-weight: 700; color: #b9b3dc; }
+.scThumb { width: 62px; height: 62px; flex: none; border-radius: 14px; overflow: hidden; border: 2px solid color-mix(in srgb, var(--pc) 55%, transparent); box-shadow: 0 6px 16px rgba(0,0,0,.4); }
+.scThumb img, .scThumb .imgPlaceholder { width: 100%; height: 100%; object-fit: cover; }
+.storyCard.premium:active { transform: scale(.97); }
+
+/* Окно точки */
+.premiumHero { position: relative; height: 270px; margin: -8px -6px 0; border-radius: 24px; overflow: hidden; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 55%, #1b1735), #120f24); }
+.premiumHero .heroShade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(10,8,22,.88)); }
+.premiumHero .heroText { position: absolute; left: 16px; right: 16px; bottom: 14px; }
+.premiumHero h3 { font-size: 28px; line-height: 1.1; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+.heroBadge { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 800; color: #fff; padding: 5px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 70%, rgba(0,0,0,.3)); box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 50%, transparent); }
+.premiumHero .pointHeroEmpty { position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 50px; font-size: 76px; }
+.pointChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 6px; }
+.pchip { font-size: 13px; font-weight: 700; color: #ddd6ff; padding: 7px 11px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.07); }
+.pchip.accent { color: #ffd76a; background: rgba(255,207,74,.1); border-color: rgba(255,207,74,.25); }
+.pointQuote { margin: 12px 0; padding: 12px 14px; border-left: 3px solid var(--accent2); background: rgba(139,92,255,.08); border-radius: 0 14px 14px 0; color: #e4e0fb; line-height: 1.55; white-space: pre-wrap; }
+.pointSection { margin-top: 14px; padding: 12px; border-radius: 18px; background: rgba(255,255,255,.03); border: 1px solid var(--line); }
+.pointSectionHead { font-size: 13px; font-weight: 800; color: #c9c5e6; margin-bottom: 8px; }
+.pointNav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
+.navBtn { border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text); border-radius: 14px; padding: 10px 14px; font-weight: 800; min-height: 44px; }
+.navBtn:disabled { opacity: .35; }
+.navDots { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+.navDots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); }
+.navDots i.on { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); width: 16px; border-radius: 4px; }
+
+/* Лента пути */
+.journeyStrip { display: flex; align-items: flex-start; overflow-x: auto; gap: 0; margin: 14px -14px 4px; padding: 10px 14px 12px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.journeyStrip::-webkit-scrollbar { display: none; }
+.jsItem { display: flex; align-items: flex-start; flex: none; scroll-snap-align: start; }
+.jsPoint { border: 0; background: none; color: var(--text); display: grid; justify-items: center; gap: 4px; width: 74px; padding: 0; }
+.jsTitle { font-size: 11px; font-weight: 700; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jsTime { font-size: 10px; color: var(--muted); }
+.jsLink { position: relative; width: 34px; height: 4px; margin-top: 20px; border-radius: 4px; background: linear-gradient(90deg, var(--a), var(--b)); flex: none; }
+.jsLink.dotted { background: repeating-linear-gradient(90deg, var(--a) 0 4px, transparent 4px 8px); }
+.jsMode { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); font-size: 13px; }
+
+.searchInput { margin: 0 0 12px; }

@@ -173,8 +173,8 @@ export function layoutStory(
       if (a && b) gap += Math.min(80, Math.log2(1 + haversineKm(a, b)) * 13);
       if (photo || hasCover(cps[i - 1])) gap += 10;
       if (cp.kind === "end") gap += 34;
-      if (half === prevHalf) gap = Math.max(gap, mini ? 70 : 124);
-      y += Math.max(gap * density, mini ? 58 : 100);
+      if (half === prevHalf) gap = Math.max(gap, mini ? 70 : 132);
+      y += Math.max(gap * density, mini ? 58 : 112);
     }
 
     nodes.push({ cp, index: i, x: r1(x), y: r1(y), d, side, photoMarker: photo && cp.style.showPhoto });
@@ -255,7 +255,7 @@ export function layoutStory(
 
   const last = nodes[nodes.length - 1];
   const height = last ? Math.ceil(last.y + Math.max(last.d / 2, mini ? 30 : 56) + 28) : 200;
-  const cardH = mini ? 44 : 84;
+  const cardH = mini ? 44 : 100;
   const upward = Boolean(opts.upward);
 
   if (upward) {

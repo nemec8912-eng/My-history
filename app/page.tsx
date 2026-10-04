@@ -97,7 +97,16 @@ export default function Home() {
   }, [reload]);
 
   const latest = trips && trips.length ? trips[0] : null;
-  const rest = trips ? trips.slice(1) : [];
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const rest = (trips ? trips.slice(1) : []).filter(
+    (t) =>
+      !q ||
+      [t.title, t.place, t.description, ...t.checkpoints.map((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`)]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+  );
 
   const totals = useMemo(() => {
     const list = trips ?? [];
@@ -201,7 +210,10 @@ export default function Home() {
           {latest && <button className="ghost" onClick={() => setOpen(true)}>+ Новая</button>}
         </div>
 
-        {latest && rest.length === 0 && <p className="muted small">Здесь появятся остальные поездки.</p>}
+        {trips && trips.length > 3 && (
+          <input className="searchInput" type="search" placeholder="Поиск: место, точка, заметка…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        )}
+        {latest && rest.length === 0 && <p className="muted small">{q ? "Ничего не найдено." : "Здесь появятся остальные поездки."}</p>}
 
         {trips && trips.length === 0 && (
           <div className="emptyCard">

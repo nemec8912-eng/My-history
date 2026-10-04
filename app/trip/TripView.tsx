@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DestinationCard } from "@/components/story/DestinationCard";
 import { StoryPointModal } from "@/components/story/StoryPointModal";
+import { JourneyStrip } from "@/components/story/JourneyStrip";
 import { StoryRoute } from "@/components/story/StoryRoute";
 import { Sheet } from "@/components/Sheet";
 import { TripEditor } from "@/components/TripEditor";
@@ -104,6 +105,8 @@ export function TripView() {
         </div>
       )}
 
+      <JourneyStrip points={cps} onOpen={(cp) => setOpenId(cp.id)} />
+
       <section className="storySection">
         {trip.description && <p className="tripDesc">{trip.description}</p>}
         <StoryRoute trip={trip} onOpen={openPoint} />
@@ -113,7 +116,7 @@ export function TripView() {
 
       {openCp && (
         <StoryPointModal
-          key={openCp.id}
+          key="point-modal"
           cp={openCp}
           index={openIndex}
           total={cps.length}
@@ -129,6 +132,13 @@ export function TripView() {
           onDelete={deleteCp}
           onMove={moveCp}
           onOpenPlace={(cid) => router.push(routes.place(trip.id, cid))}
+          onNavigate={(i) => {
+            const next = cps[i];
+            if (next) {
+              setNewId(null);
+              setOpenId(next.id);
+            }
+          }}
         />
       )}
 

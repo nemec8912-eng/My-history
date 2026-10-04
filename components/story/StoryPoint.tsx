@@ -4,6 +4,8 @@ import type { CSSProperties } from "react";
 import type { StoryNode } from "@/lib/storyLayout";
 import type { Checkpoint } from "@/lib/types";
 import { MediaImg } from "../media/Media";
+import { MediaCounts } from "../media/MediaCounts";
+import { TRAVEL } from "@/lib/travel";
 import { PointMarker, checkpointLabel } from "../PointMarker";
 
 export function StoryPointMarker({ node }: { node: StoryNode }) {
@@ -49,19 +51,37 @@ export function StoryPointPreview({
     );
   }
   return (
-    <button type="button" className={`storyCard ${side} ${isEnd ? "end" : ""}`} style={style} onClick={onOpen}>
+    <button
+      type="button"
+      className={`storyCard premium ${side} ${isEnd ? "end" : ""} ${cp.importance >= 2 ? "important" : ""}`}
+      style={{ ...style, ["--pc" as string]: cp.style.color }}
+      onClick={onOpen}
+    >
+      <span className="scAccent" aria-hidden />
       <span className="storyCardText">
-        <span className="storyCardTitle">
-          <span className="storyNum" style={{ color: cp.style.color }}>
-            {index + 1}.
-          </span>{" "}
-          {cp.title || "Без названия"}
+        <span className="scTop">
+          <span className="scNum">{index + 1}</span>
+          {cp.time && <span className="scTime">{cp.time}</span>}
+          {cp.importance >= 2 && <span className="scStar" title="Важная точка">★</span>}
         </span>
-        {cp.time && <span className="storyTime">{cp.time}</span>}
+        <span className="storyCardTitle">{cp.title || "Без названия"}</span>
         {subtitle && <span className="storyDesc">{subtitle}</span>}
-        {count > 1 && <span className="storyCount">{count} файлов</span>}
+        {(cp.arrivedBy || count > 0) && (
+          <span className="scMeta">
+            {cp.arrivedBy && (
+              <span className="scTag">
+                {TRAVEL[cp.arrivedBy].icon} {TRAVEL[cp.arrivedBy].label}
+              </span>
+            )}
+            {count > 0 && <MediaCounts ids={cp.mediaIds} />}
+          </span>
+        )}
       </span>
-      {thumb && <MediaImg id={cp.coverMediaId} className="storyThumb" />}
+      {thumb && (
+        <span className="scThumb">
+          <MediaImg id={cp.coverMediaId} />
+        </span>
+      )}
       {isEnd && <span className="storyChevron">›</span>}
     </button>
   );
