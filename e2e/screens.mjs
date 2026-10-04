@@ -64,6 +64,10 @@ async function run(name, browserType, device) {
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(2500);
     await shot("8-trip-after-reload");
+    await page.goto(BASE + "/", { waitUntil: "networkidle" });
+    await page.waitForTimeout(3500);
+    await shot("9-home-with-trip");
+    await shot("9b-home-full", true);
     log.push(`[${name}] OK url=${page.url()} overflowX=${await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)}`);
   } catch (e) {
     log.push(`[${name}] FAILED: ${e.message}`);

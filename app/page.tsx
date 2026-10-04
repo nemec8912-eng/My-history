@@ -208,7 +208,6 @@ export default function Home() {
             <p>Здесь появятся ваши поездки.</p>
             <div className="heroActions">
               <button className="primary" onClick={() => setOpen(true)}>Создать поездку</button>
-              <button className="softBtn" disabled={busy} onClick={() => create(demoTrip())}>Открыть пример</button>
             </div>
           </div>
         )}
