@@ -227,8 +227,6 @@ export function MomentView() {
               setEdit(false);
             }}
             onDelete={cp.kind === "regular" ? deleteMoment : undefined}
-                : undefined
-            }
           />
         </Sheet>
       )}
