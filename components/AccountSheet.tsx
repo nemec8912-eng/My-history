@@ -17,12 +17,19 @@ type Stage = "signin" | "signup" | "link" | "reset" | "newPassword";
  * по ссылке из стандартного письма Supabase. Пароль работает и в PWA на iPhone,
  * где ссылка из письма открылась бы в Safari, а не в установленном приложении.
  */
-export function AccountSheet({
-  onClose,
+export function AccountSheet(props: { onClose: () => void; onChanged: () => void; initialStage?: Stage }) {
+  return (
+    <Sheet onClose={props.onClose}>
+      <AccountPanel onChanged={props.onChanged} initialStage={props.initialStage} />
+    </Sheet>
+  );
+}
+
+/** Содержимое раздела «Я»: вход, Google Диск, место, синхронизация. */
+export function AccountPanel({
   onChanged,
   initialStage,
 }: {
-  onClose: () => void;
   onChanged: () => void;
   initialStage?: Stage;
 }) {
@@ -46,13 +53,13 @@ export function AccountSheet({
 
   if (!sb || !isCloudConfigured()) {
     return (
-      <Sheet onClose={onClose}>
+      <>
         <div className="editor">
           <p className="eyebrow">Аккаунт</p>
           <h3>Облако ещё не подключено</h3>
           <p className="muted">Сейчас поездки и фото хранятся только на этом устройстве.</p>
         </div>
-      </Sheet>
+      </>
     );
   }
 
@@ -162,7 +169,7 @@ export function AccountSheet({
   );
 
   return (
-    <Sheet onClose={onClose}>
+    <>
       <div className="editor accountSheet">
         <p className="eyebrow">Аккаунт</p>
         {net && !net.ok && <p className="errorBar">{net.reason}. Поездки продолжают сохраняться на этом устройстве.</p>}
@@ -238,6 +245,6 @@ export function AccountSheet({
         {msg && <p className={msg.error ? "errorBar" : "okBar"}>{msg.text}</p>}
         {busy && <p className="muted small">Подождите…</p>}
       </div>
-    </Sheet>
+    </>
   );
 }

@@ -9,6 +9,14 @@ export const routes = {
   home: "/",
   trip: (id: string) => `/trip/?id=${encodeURIComponent(id)}`,
   place: (tripId: string, cpId: string) => `/place/?trip=${encodeURIComponent(tripId)}&cp=${encodeURIComponent(cpId)}`,
+  moment: (tripId: string, cpId: string) => `/moment/?trip=${encodeURIComponent(tripId)}&cp=${encodeURIComponent(cpId)}`,
+  newMoment: (tripId?: string) => (tripId ? `/new/?trip=${encodeURIComponent(tripId)}` : "/new/"),
+  map: "/map/",
+  timeline: "/timeline/",
+  photos: "/photos/",
+  videos: "/videos/",
+  search: "/search/",
+  me: "/me/",
 };
 
 /** Абсолютный путь к файлу из public/ с учётом basePath. */

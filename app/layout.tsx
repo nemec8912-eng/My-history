@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { RegisterSW } from "@/components/RegisterSW";
 import { DriveBanner } from "@/components/DriveSection";
@@ -15,7 +16,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0f0d1c",
+  themeColor: "#0a0d14",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

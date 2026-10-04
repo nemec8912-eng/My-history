@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { MediaImg, MediaPicker } from "@/components/media/Media";
+import { useMediaMetas } from "@/components/media/useMedia";
 import { Sheet } from "@/components/Sheet";
 import { AccountSheet } from "@/components/AccountSheet";
-import { StoryRoute } from "@/components/story/StoryRoute";
+import { TabScreen } from "@/components/BottomNav";
+import { Icon } from "@/components/Icon";
 import { getSupabase } from "@/lib/supabase";
 import { routes } from "@/lib/routes";
-import { formatDate, plural } from "@/lib/format";
+import { plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, localTripCount, newTrip } from "@/lib/repo";
+import { isEvent, kindLabel, momentDate, tripCover, tripDateRange, tripDays, tripKm, tripMediaIds } from "@/lib/stats";
+import { useTrips } from "@/lib/useTrips";
 import type { Checkpoint, Trip } from "@/lib/types";
 
 const today = () => {
@@ -19,16 +23,14 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
-}
+const RU_MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
 function demoTrip(): Trip {
   const p = (title: string, time: string, icon: string, color: string, extra: Partial<Checkpoint> = {}) =>
     createCheckpoint("regular", { title, time, icon, style: { shape: "circle", color, size: "m", showLabel: false, showPhoto: true }, ...extra });
   return newTrip({
     title: "Поездка в зоопарк (пример)",
+    meta: { kind: "trip" },
     date: today(),
     place: "Москва",
     description: "Пример поездки: откройте любую точку, добавьте фото, поменяйте форму, цвет и размер.",
@@ -53,32 +55,135 @@ function demoTrip(): Trip {
   });
 }
 
+
+/** Цифры поездки для чипов: только то, что реально есть. */
+function useTripChips(t: Trip) {
+  const metas = useMediaMetas(tripMediaIds(t));
+  const photos = metas.filter((m) => m.kind === "image").length;
+  const videos = metas.filter((m) => m.kind === "video").length;
+  const km = tripKm(t);
+  const days = tripDays(t);
+  return { photos, videos, km, days };
+}
+
+function Chips({ t, compact }: { t: Trip; compact?: boolean }) {
+  const { photos, videos, km, days } = useTripChips(t);
+  return (
+    <div className={`tChips ${compact ? "compact" : ""}`}>
+      {!isEvent(t) && (
+        <span>
+          <Icon name="calendar" size={15} /> {days} {plural(days, "день", "дня", "дней")}
+        </span>
+      )}
+      {km != null && km >= 0.1 && (
+        <span>
+          <Icon name="route" size={15} /> {km >= 10 ? Math.round(km) : km.toFixed(1)} км
+        </span>
+      )}
+      {photos > 0 && (
+        <span>
+          <Icon name="photo" size={15} /> {photos} фото
+        </span>
+      )}
+      {!compact && videos > 0 && (
+        <span>
+          <Icon name="video" size={15} /> {videos} видео
+        </span>
+      )}
+      {isEvent(t) && <span className="kindTag">Событие</span>}
+    </div>
+  );
+}
+
+function CoverBg({ t, className }: { t: Trip; className?: string }) {
+  const cover = tripCover(t);
+  const color = t.checkpoints[t.checkpoints.length - 1]?.style.color ?? "#2f7bff";
+  return (
+    <div className={`coverBg ${className ?? ""}`} style={{ ["--c" as string]: color }}>
+      {cover ? <MediaImg id={cover} variant="original" /> : <span className="coverEmpty">{t.checkpoints.find((c) => c.icon)?.icon ?? "🗺"}</span>}
+      <i className="coverShade" />
+    </div>
+  );
+}
+
+/** «Этот день»: реальные поездки и моменты прошлых лет в эту же дату. */
+function useThisDay(trips: Trip[] | null) {
+  return useMemo(() => {
+    if (!trips) return [];
+    const now = today();
+    const md = now.slice(5);
+    const year = Number(now.slice(0, 4));
+    const hits: { t: Trip; cp?: Checkpoint; years: number }[] = [];
+    for (const t of trips) {
+      const tripHit = t.date.slice(5) === md && Number(t.date.slice(0, 4)) < year;
+      const cp = t.checkpoints.find((c) => {
+        const d = momentDate(t, c);
+        return d.slice(5) === md && Number(d.slice(0, 4)) < year;
+      });
+      if (tripHit || cp) {
+        const d = cp ? momentDate(t, cp) : t.date;
+        hits.push({ t, cp, years: year - Number(d.slice(0, 4)) });
+      }
+    }
+    return hits.sort((a, b) => a.years - b.years);
+  }, [trips]);
+}
+
+function ThisDayCard({ hit }: { hit: { t: Trip; cp?: Checkpoint; years: number } }) {
+  const { t, cp, years } = hit;
+  const [, m, d] = today().split("-").map(Number);
+  const place = cp?.title ?? t.title;
+  const region = cp?.location?.label ?? t.place;
+  const w = cp?.meta?.weather;
+  const href = cp ? routes.moment(t.id, cp.id) : routes.trip(t.id);
+  const cover = cp?.coverMediaId ?? tripCover(t);
+  return (
+    <Link className="thisDay" href={href}>
+      <div className="coverBg">
+        {cover ? <MediaImg id={cover} variant="original" /> : <span className="coverEmpty">✨</span>}
+        <i className="coverShade" />
+      </div>
+      <div className="tdTop">
+        <strong className="tdTitle">Этот день</strong>
+        <span className="tdDate">{d} {RU_MONTHS_GEN[m - 1]}</span>
+        <span className="tdAgo">
+          {years} {plural(years, "год", "года", "лет")} назад
+          <br />
+          Вы были здесь
+        </span>
+      </div>
+      <div className="tdBottom">
+        <div>
+          <strong>{place}</strong>
+          {region && <span>{region}</span>}
+        </div>
+        {w && (
+          <span className="tdWeather">
+            {w.icon} {w.temp > 0 ? "+" : ""}
+            {w.temp}°
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
-  const [trips, setTrips] = useState<Trip[] | null>(null);
+  const { trips, cloud, reload } = useTrips();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState({ title: "", date: today(), time: "", place: "", text: "", from: "", to: "", cover: undefined as string | undefined });
-
   const [account, setAccount] = useState<false | "signin" | "newPassword">(false);
   const [authNote, setAuthNote] = useState<string | null>(null);
-  const [cloud, setCloud] = useState(false);
   const [pendingLocal, setPendingLocal] = useState(0);
-
-  const reload = useCallback(() => {
-    getRepo()
-      .then((r) => {
-        setCloud(r.mode === "cloud");
-        if (r.mode === "cloud") localTripCount().then(setPendingLocal).catch(() => undefined);
-        else setPendingLocal(0);
-        return r.list();
-      })
-      .then(setTrips)
-      .catch(() => setTrips([]));
-  }, []);
+  const thisDay = useThisDay(trips);
 
   useEffect(() => {
-    reload();
+    if (cloud) localTripCount().then(setPendingLocal).catch(() => undefined);
+  }, [cloud, trips]);
+
+  useEffect(() => {
     const sb = getSupabase();
     if (!sb) return;
     // Ошибка из ссылки письма (например, ссылка устарела) приходит в адресе страницы.
@@ -91,48 +196,12 @@ export default function Home() {
     const { data } = sb.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") setAccount("newPassword");
       if (event === "SIGNED_IN") setAuthNote(null);
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") reload();
     });
     return () => data.subscription.unsubscribe();
-  }, [reload]);
+  }, []);
 
-  const latest = trips && trips.length ? trips[0] : null;
-  const onThisDay = useMemo(() => {
-    const md = today().slice(5);
-    const year = today().slice(0, 4);
-    return (trips ?? []).filter((t) => t.date.slice(5) === md && t.date.slice(0, 4) < year);
-  }, [trips]);
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const rest = trips ? trips.slice(1) : [];
-  // Поиск с первых букв: сначала названия, начинающиеся с запроса, затем совпадения с начала слова, затем любые.
-  const found = useMemo(() => {
-    if (!q || !trips) return [];
-    const scored = trips
-      .map((t) => {
-        const title = t.title.toLowerCase();
-        const text = [t.title, t.place, t.description, ...t.checkpoints.map((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`)]
-          .join(" ")
-          .toLowerCase();
-        let score = -1;
-        if (title.startsWith(q)) score = 0;
-        else if (title.split(/[\s,.()«»-]+/).some((w) => w.startsWith(q))) score = 1;
-        else if (text.split(/[\s,.()«»-]+/).some((w) => w.startsWith(q))) score = 2;
-        else if (text.includes(q)) score = 3;
-        return { t, score };
-      })
-      .filter((x) => x.score >= 0);
-    scored.sort((a, b) => a.score - b.score || b.t.date.localeCompare(a.t.date));
-    return scored.map((x) => x.t);
-  }, [q, trips]);
-
-  const totals = useMemo(() => {
-    const list = trips ?? [];
-    return {
-      trips: list.length,
-      media: list.reduce((s, t) => s + t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0), 0),
-    };
-  }, [trips]);
+  const recent = trips ?? [];
+  const [first, ...others] = recent;
 
   async function create(trip: Trip) {
     setBusy(true);
@@ -160,145 +229,82 @@ export default function Home() {
         coverMediaId: draft.cover,
         mediaIds: draft.cover ? [draft.cover] : [],
         checkpoints: [start, end],
+        meta: { kind: "trip" },
       })
     );
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">{greeting()}</p>
-          <h1>Моя история</h1>
-        </div>
-        <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount("signin")}>Я</button>
+    <TabScreen className="home">
+      <header className="appHeader">
+        <span className="ahSide" />
+        <h1>Моя история</h1>
+        <span className="ahSide right">
+          <Link href={routes.search} className="iconBtnPlain" aria-label="Поиск">
+            <Icon name="search" />
+          </Link>
+          <Link href={routes.me} className="iconBtnPlain" aria-label="Аккаунт">
+            <Icon name="settings" />
+          </Link>
+        </span>
       </header>
 
-      {trips && trips.length > 1 && (
-        <div className="searchWrap">
-          <span className="searchIcon" aria-hidden>⌕</span>
-          <input
-            className="searchInput"
-            type="search"
-            placeholder="Поиск по поездкам, точкам, заметкам…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            enterKeyHint="search"
-          />
-          {query && (
-            <button className="searchClear" aria-label="Очистить" onClick={() => setQuery("")}>
-              ×
-            </button>
-          )}
-        </div>
-      )}
-
-      {q ? (
-        <section className="section">
-          <div className="sectionTitle">
-            <h3>Найдено: {found.length}</h3>
-          </div>
-          {found.length === 0 && <p className="muted">Ничего не найдено. Попробуйте другие буквы.</p>}
-          <div className="tripRows">
-            {found.map((t) => <TripRowLink key={t.id} t={t} q={q} />)}
-          </div>
-        </section>
-      ) : latest ? (
-        <section className="journey" aria-label="Последняя поездка">
-          <div className="journeyHead">
-            <div>
-              <p className="eyebrow">Последняя поездка</p>
-              <h2>{latest.title}</h2>
-              <p className="journeyMeta">
-                {formatDate(latest.date)}
-                {latest.place ? ` · ${latest.place}` : ""} · {latest.checkpoints.length} {plural(latest.checkpoints.length, "точка", "точки", "точек")}
-              </p>
-            </div>
-            <Link className="journeyOpen" href={routes.trip(latest.id)} aria-label="Открыть поездку">›</Link>
-          </div>
-          <div className="nightPanel">
-            <StoryRoute trip={latest} preview onOpen={() => router.push(routes.trip(latest.id))} />
-          </div>
-          <div className="journeyActions">
-            <Link className="primary" href={routes.trip(latest.id)}>Открыть историю</Link>
-            <button className="ghostLight" onClick={() => setOpen(true)}>+ Новая поездка</button>
-          </div>
-        </section>
-      ) : (
-        <section className="hero">
-          <div>
-            <p className="eyebrow">Твои воспоминания</p>
-            <h2>Каждая поездка — отдельная история пути</h2>
-            <p className="muted">Отмечай точки пути снизу вверх: фото, заметки, адреса — и маршрут волной соединит их в историю.</p>
-          </div>
-          <div className="heroActions">
-            <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
-            {trips && <button className="softBtn" disabled={busy} onClick={() => create(demoTrip())}>Открыть пример</button>}
-          </div>
-        </section>
-      )}
-
       {authNote && <p className="errorBar">{authNote}</p>}
-
       {cloud && pendingLocal > 0 && (
-        <button className="syncBanner" onClick={() => setAccount("signin")}>
-          На этом устройстве есть поездки ({pendingLocal}), которых нет в аккаунте. Перенести ›
-        </button>
+        <Link className="syncBanner" href={routes.me}>
+          На этом устройстве есть записи ({pendingLocal}), которых нет в аккаунте. Перенести ›
+        </Link>
       )}
 
-      {!q && onThisDay.length > 0 && (
-        <section className="onThisDay">
-          <p className="eyebrow">В этот день</p>
-          {onThisDay.map((t) => {
-            const years = new Date().getFullYear() - Number(t.date.slice(0, 4));
-            return (
-              <Link key={t.id} className="otdCard" href={routes.trip(t.id)}>
-                <span className="otdYears">{years} {plural(years, "год", "года", "лет")} назад</span>
-                <strong>{t.title}</strong>
-                <span className="muted small">{formatDate(t.date)}{t.place ? ` · ${t.place}` : ""}</span>
-              </Link>
-            );
-          })}
+      {thisDay[0] && <ThisDayCard hit={thisDay[0]} />}
+
+      {trips && trips.length === 0 && (
+        <section className="welcome">
+          <h2>Ваши воспоминания начнутся здесь</h2>
+          <p className="muted">Поездка с маршрутом или просто событие на прогулке — фото, видео, голос и заметки в одном месте.</p>
+          <div className="heroActions">
+            <Link className="primary" href={routes.newMoment()}>+ Новый момент</Link>
+            <button className="softBtn" onClick={() => setOpen(true)}>Новая поездка</button>
+            <button className="softBtn" disabled={busy} onClick={() => create(demoTrip())}>Открыть пример</button>
+          </div>
         </section>
       )}
 
-      {!q && <section className="stats">
-        <div><strong>{totals.trips}</strong><span>{plural(totals.trips, "поездка", "поездки", "поездок")}</span></div>
-        <div><strong>{totals.media}</strong><span>{plural(totals.media, "файл", "файла", "файлов")}</span></div>
-      </section>}
-
-      {!q && (
-      <section className="section">
-        <div className="sectionTitle">
-          <h3>{latest ? "Все поездки" : "Мои поездки"}</h3>
-          {latest && <button className="ghost" onClick={() => setOpen(true)}>+ Новая</button>}
-        </div>
-
-        {latest && rest.length === 0 && <p className="muted small">Здесь появятся остальные поездки.</p>}
-
-        {trips && trips.length === 0 && (
-          <div className="emptyCard">
-            <p>Здесь появятся ваши поездки.</p>
-            <div className="heroActions">
-              <button className="primary" onClick={() => setOpen(true)}>Создать поездку</button>
-            </div>
+      {first && (
+        <section className="homeSection">
+          <div className="sectionHead">
+            <h2>Последние поездки</h2>
+            <Link href={routes.timeline}>
+              Все <Icon name="chevron" size={16} />
+            </Link>
           </div>
-        )}
-
-        {groupByMonth(rest).map((g) => (
-          <div key={g.key} className="monthGroup">
-            <p className="monthLabel">{g.label}</p>
-            <div className="tripRows">
-              {g.trips.map((t) => <TripRowLink key={t.id} t={t} />)}
+          <Link className="bigTrip" href={routes.trip(first.id)}>
+            <CoverBg t={first} />
+            <div className="btText">
+              <strong>{first.title}</strong>
+              <span>{tripDateRange(first)}</span>
+              <Chips t={first} />
             </div>
+          </Link>
+          {others.length > 0 && (
+            <div className="tripGrid">
+              {others.slice(0, 6).map((t) => (
+                <Link key={t.id} className="smallTrip" href={routes.trip(t.id)}>
+                  <CoverBg t={t} />
+                  <div className="stText">
+                    <strong>{t.title}</strong>
+                    <span>{tripDateRange(t)}</span>
+                    <Chips t={t} compact />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="homeActions">
+            <button className="softBtn" onClick={() => setOpen(true)}>+ Новая поездка</button>
+            <Link className="softBtn" href={routes.newMoment()}>+ Событие</Link>
           </div>
-        ))}
-        {trips && trips.length > 0 && (
-          <button className="softBtn" style={{ marginTop: 16 }} disabled={busy} onClick={() => create(demoTrip())}>
-            + Пример поездки
-          </button>
-        )}
-      </section>
+        </section>
       )}
 
       {account && <AccountSheet initialStage={account} onClose={() => setAccount(false)} onChanged={reload} />}
@@ -349,66 +355,6 @@ export default function Home() {
           </form>
         </Sheet>
       )}
-    </main>
+    </TabScreen>
   );
-}
-
-function Highlight({ text, q }: { text: string; q?: string }) {
-  if (!q) return <>{text}</>;
-  const i = text.toLowerCase().indexOf(q);
-  if (i < 0) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, i)}
-      <mark className="hl">{text.slice(i, i + q.length)}</mark>
-      {text.slice(i + q.length)}
-    </>
-  );
-}
-
-function TripRowLink({ t, q }: { t: Trip; q?: string }) {
-  const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
-  const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
-  const end = t.checkpoints[t.checkpoints.length - 1];
-  const hitPoint = q && !t.title.toLowerCase().includes(q) ? t.checkpoints.find((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`.toLowerCase().includes(q)) : undefined;
-  return (
-    <Link className="tripRow" href={routes.trip(t.id)}>
-      <span className="tripRowCover" style={{ background: end?.style.color }}>
-        {cover ? <MediaImg id={cover} /> : <span>{end?.icon ?? "★"}</span>}
-      </span>
-      <span className="tripRowText">
-        <strong>
-          <Highlight text={t.title} q={q} />
-        </strong>
-        <span className="muted small">
-          {formatDate(t.date)} · {t.checkpoints.length} {plural(t.checkpoints.length, "точка", "точки", "точек")}
-          {media ? ` · ${media} ${plural(media, "файл", "файла", "файлов")}` : ""}
-        </span>
-        {hitPoint && (
-          <span className="small hitPoint">
-            в точке «<Highlight text={hitPoint.title} q={q} />»
-          </span>
-        )}
-      </span>
-      <span className="tripRowChevron">›</span>
-    </Link>
-  );
-}
-
-const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
-
-/** Группирует поездки по месяцам: «Октябрь 2026», «Сентябрь 2026»… */
-function groupByMonth(list: Trip[]) {
-  const groups: { key: string; label: string; trips: Trip[] }[] = [];
-  for (const t of list) {
-    const key = t.date.slice(0, 7);
-    let g = groups[groups.length - 1];
-    if (!g || g.key !== key) {
-      const m = Number(key.slice(5, 7)) - 1;
-      g = { key, label: `${MONTHS[m] ?? ""} ${key.slice(0, 4)}`.trim(), trips: [] };
-      groups.push(g);
-    }
-    g.trips.push(t);
-  }
-  return groups;
 }

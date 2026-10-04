@@ -59,6 +59,30 @@ export type PlaceDetails = {
   moments: Moment[];
 };
 
+/** Погода в момент события (сохраняется один раз, источник — Open-Meteo). */
+export type Weather = {
+  temp: number;
+  code: number;
+  label: string;
+  icon: string;
+};
+
+/** Необязательные поля момента (в базе — колонка meta jsonb; без неё хранятся на устройстве). */
+export type CheckpointMeta = {
+  /** Дата момента YYYY-MM-DD (для многодневных поездок). */
+  date?: string;
+  weather?: Weather;
+  /** Тип момента при создании: фото, видео, аудио или заметка. */
+  type?: "photo" | "video" | "audio" | "note";
+};
+
+export type TripMeta = {
+  /** Дата окончания поездки YYYY-MM-DD. */
+  endDate?: string;
+  /** «trip» — поездка с маршрутом (по умолчанию), «event» — событие без поездки: просто вышел, и что-то случилось. */
+  kind?: "trip" | "event";
+};
+
 export type Checkpoint = {
   id: string;
   kind: CheckpointKind;
@@ -78,6 +102,7 @@ export type Checkpoint = {
   mediaIds: MediaId[];
   /** Если задано — точка является «большой локацией» со своей страницей. */
   place?: PlaceDetails;
+  meta?: CheckpointMeta;
 };
 
 /* ───────────── Маршрут ───────────── */
@@ -129,6 +154,7 @@ export type Trip = {
   route?: RouteData;
   /** Порядок массива = порядок точек маршрута. */
   checkpoints: Checkpoint[];
+  meta?: TripMeta;
   createdAt: string;
   updatedAt: string;
 };

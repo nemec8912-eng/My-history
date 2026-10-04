@@ -124,6 +124,7 @@ type TripRow = {
   cover_media_id: string | null;
   media_ids: string[] | null;
   route: Trip["route"] | null;
+  meta?: Trip["meta"] | null;
   created_at: string;
   updated_at: string;
 };
@@ -146,7 +147,31 @@ type CheckpointRow = {
   cover_media_id: string | null;
   media_ids: string[] | null;
   place: Checkpoint["place"] | null;
+  meta?: Checkpoint["meta"] | null;
 };
+
+/**
+ * Колонка meta появилась позже (supabase/migrations/001_meta.sql). Если её ещё нет в базе,
+ * сохраняем без неё, а дату/погоду моментов держим в локальном кэше — старые данные не ломаются.
+ */
+let cloudHasMeta = true;
+const isMissingMeta = (e: unknown) => /meta/i.test(String((e as { message?: string })?.message ?? "")) && /column|schema/i.test(String((e as { message?: string })?.message ?? ""));
+
+function stripMeta<T extends { meta?: unknown }>(row: T): Omit<T, "meta"> {
+  const { meta: _m, ...rest } = row;
+  void _m;
+  return rest;
+}
+
+/** Подставляет meta из локального кэша, если облако его не вернуло. */
+function mergeMeta(cloud: Trip, cached?: Trip): Trip {
+  if (!cached) return cloud;
+  return {
+    ...cloud,
+    meta: cloud.meta ?? cached.meta,
+    checkpoints: cloud.checkpoints.map((c) => ({ ...c, meta: c.meta ?? cached.checkpoints.find((x) => x.id === c.id)?.meta })),
+  };
+}
 
 function toTripRow(t: Trip, ownerId: string): TripRow {
   return {
@@ -160,6 +185,7 @@ function toTripRow(t: Trip, ownerId: string): TripRow {
     cover_media_id: t.coverMediaId ?? null,
     media_ids: t.mediaIds,
     route: t.route ?? null,
+    meta: t.meta ?? null,
     created_at: t.createdAt,
     updated_at: t.updatedAt,
   };
@@ -184,6 +210,7 @@ function toCheckpointRow(c: Checkpoint, tripId: string, ownerId: string, positio
     cover_media_id: c.coverMediaId ?? null,
     media_ids: c.mediaIds,
     place: c.place ?? null,
+    meta: c.meta ?? null,
   };
 }
 
@@ -198,6 +225,7 @@ function fromRows(t: TripRow, cps: CheckpointRow[]): Trip {
     coverMediaId: t.cover_media_id ?? undefined,
     mediaIds: t.media_ids ?? [],
     route: t.route ?? undefined,
+    meta: t.meta ?? undefined,
     createdAt: t.created_at,
     updatedAt: t.updated_at,
     checkpoints: cps
@@ -219,6 +247,7 @@ function fromRows(t: TripRow, cps: CheckpointRow[]): Trip {
         coverMediaId: c.cover_media_id ?? undefined,
         mediaIds: c.media_ids ?? [],
         place: c.place ?? undefined,
+        meta: c.meta ?? undefined,
       })),
   });
 }
@@ -235,7 +264,10 @@ function cloudRepo(ownerId: string): TripRepo {
         ]);
         if (e1) throw e1;
         if (e2) throw e2;
-        const result = sortTrips((trips as TripRow[]).map((t) => fromRows(t, (cps ?? []) as CheckpointRow[])));
+        const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
+        const result = sortTrips(
+          (trips as TripRow[]).map((t) => mergeMeta(fromRows(t, (cps ?? []) as CheckpointRow[]), cached.find((c) => c.id === t.id)))
+        );
         await writeLocal(result, CACHE_KEY).catch(() => undefined);
         return result;
       } catch (e) {
@@ -251,7 +283,9 @@ function cloudRepo(ownerId: string): TripRepo {
         ]);
         if (e1) throw e1;
         if (e2) throw e2;
-        return t ? fromRows(t as TripRow, (cps ?? []) as CheckpointRow[]) : null;
+        if (!t) return null;
+        const cached = (await readLocal(CACHE_KEY).catch(() => [] as Trip[])).find((c) => c.id === id);
+        return mergeMeta(fromRows(t as TripRow, (cps ?? []) as CheckpointRow[]), cached);
       } catch {
         return (await readLocal(CACHE_KEY)).find((t) => t.id === id) ?? null;
       }
@@ -263,11 +297,20 @@ function cloudRepo(ownerId: string): TripRepo {
       else cache.push(trip);
       await writeLocal(cache, CACHE_KEY).catch(() => undefined);
 
-      const { error } = await sb.from("trips").upsert(toTripRow(trip, ownerId));
+      const tripRow = toTripRow(trip, ownerId);
+      let { error } = await sb.from("trips").upsert(cloudHasMeta ? tripRow : stripMeta(tripRow));
+      if (error && cloudHasMeta && isMissingMeta(error)) {
+        cloudHasMeta = false;
+        ({ error } = await sb.from("trips").upsert(stripMeta(tripRow)));
+      }
       if (error) throw error;
       const rows = trip.checkpoints.map((c, idx) => toCheckpointRow(c, trip.id, ownerId, idx));
       if (rows.length) {
-        const { error: e2 } = await sb.from("checkpoints").upsert(rows);
+        let { error: e2 } = await sb.from("checkpoints").upsert(cloudHasMeta ? rows : rows.map(stripMeta));
+        if (e2 && cloudHasMeta && isMissingMeta(e2)) {
+          cloudHasMeta = false;
+          ({ error: e2 } = await sb.from("checkpoints").upsert(rows.map(stripMeta)));
+        }
         if (e2) throw e2;
       }
       const keep = rows.map((r) => r.id);
