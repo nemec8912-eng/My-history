@@ -318,7 +318,7 @@ export function TripView() {
       {tab === "moments" && (
         <section className="tabBody">
           <div className="momentList">
-            {cps.map((c) => (
+            {cps.filter((c) => Boolean(c.meta?.type)).map((c) => (
               <Link key={c.id} className="momentRow" href={routes.moment(trip.id, c.id)}>
                 <span className="mrThumb" style={{ background: c.style.color }}>
                   {c.coverMediaId ? <MediaImg id={c.coverMediaId} /> : <span>{c.icon ?? "📍"}</span>}
