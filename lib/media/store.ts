@@ -68,6 +68,47 @@ async function processImage(file: File) {
   return { full, thumb, width: img.naturalWidth, height: img.naturalHeight };
 }
 
+/** Кадр-обложка видео (для быстрых плиток без загрузки всего ролика). */
+function videoPoster(file: Blob): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    let done = false;
+    const finish = (b: Blob | null) => {
+      if (done) return;
+      done = true;
+      URL.revokeObjectURL(url);
+      resolve(b);
+    };
+    const timer = setTimeout(() => finish(null), 8000);
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    v.onloadeddata = () => {
+      v.currentTime = Math.min(0.6, (v.duration || 1) / 3);
+    };
+    v.onseeked = () => {
+      const scale = Math.min(1, THUMB_SIDE / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((v.videoWidth || THUMB_SIDE) * scale));
+      c.height = Math.max(1, Math.round((v.videoHeight || THUMB_SIDE) * scale));
+      const ctx = c.getContext("2d");
+      if (!ctx) return finish(null);
+      ctx.drawImage(v, 0, 0, c.width, c.height);
+      c.toBlob((b) => {
+        clearTimeout(timer);
+        finish(b);
+      }, "image/jpeg", 0.8);
+    };
+    v.onerror = () => {
+      clearTimeout(timer);
+      finish(null);
+    };
+    v.src = url;
+    v.load();
+  });
+}
+
 /* ───────────── Облако (Supabase Storage как первый провайдер) ───────────── */
 
 async function getPending(): Promise<MediaId[]> {
