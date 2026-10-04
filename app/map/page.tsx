@@ -12,6 +12,9 @@ import { formatDate } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { hasCoords, isEvent, momentDate } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
+import { TagFilter } from "@/components/Tags";
+import { routeCoords } from "@/lib/gpx";
+import { allTags, cpHasTag, tripHasTag } from "@/lib/tags";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 
@@ -23,11 +26,13 @@ function MapScreen() {
   const [year, setYear] = useState<string>("all");
   const [sel, setSel] = useState<string | null>(null);
   const [base, setBase] = useState<"map" | "satellite">("map");
+  const [tag, setTag] = useState<string | null>(null);
+  const tags = useMemo(() => allTags(trips ?? []), [trips]);
 
   const years = useMemo(() => Array.from(new Set((trips ?? []).map((t) => t.date.slice(0, 4)))).sort().reverse(), [trips]);
   const shown = useMemo(
-    () => (trips ?? []).filter((t) => (onlyTrip ? t.id === onlyTrip : year === "all" || t.date.startsWith(year))),
-    [trips, year, onlyTrip]
+    () => (trips ?? []).filter((t) => (onlyTrip ? t.id === onlyTrip : year === "all" || t.date.startsWith(year)) && tripHasTag(t, tag)),
+    [trips, year, onlyTrip, tag]
   );
 
   const { points, lines, index } = useMemo(() => {
@@ -36,7 +41,7 @@ function MapScreen() {
     const index = new Map<string, { tripId: string; cpId: string }>();
     shown.forEach((t, ti) => {
       const color = TRIP_COLORS[ti % TRIP_COLORS.length];
-      const located = t.checkpoints.filter(hasCoords);
+      const located = t.checkpoints.filter((c) => hasCoords(c) && cpHasTag(c, tag));
       located.forEach((c) => {
         const id = `${t.id}:${c.id}`;
         index.set(id, { tripId: t.id, cpId: c.id });
@@ -51,7 +56,9 @@ function MapScreen() {
           big: c.kind === "end" || c.importance >= 2,
         });
       });
-      if (!isEvent(t) && located.length > 1) lines.push({ id: t.id, color, coords: located.map((c) => [c.location!.lat, c.location!.lon]) });
+      const track = routeCoords(t.route);
+      if (track.length > 1 && !tag) lines.push({ id: t.id, color, coords: track });
+      else if (!isEvent(t) && located.length > 1) lines.push({ id: t.id, color, coords: located.map((c) => [c.location!.lat, c.location!.lon]) });
     });
     return { points, lines, index };
   }, [shown]);
@@ -81,6 +88,12 @@ function MapScreen() {
             <strong>Пока нет мест на карте</strong>
             <span>Укажите место у момента (поиск или «Я здесь») — и он появится здесь вместе с маршрутом поездки.</span>
             <Link className="primary" href={routes.newMoment()}>+ Новый момент</Link>
+          </div>
+        )}
+
+        {!onlyTrip && tags.length > 0 && (
+          <div className="mapTags">
+            <TagFilter tags={tags} value={tag} onChange={setTag} />
           </div>
         )}
 

@@ -13,6 +13,7 @@ import { routes } from "@/lib/routes";
 import { hasCoords, isEvent, momentDate } from "@/lib/stats";
 import { useTrip } from "@/lib/useTrip";
 import { fetchWeather } from "@/lib/weather";
+import { shareTripHtml } from "@/lib/shareHtml";
 import type { Checkpoint } from "@/lib/types";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
@@ -132,6 +133,19 @@ export function MomentView() {
             <Icon name="back" />
           </Link>
           <span className="heroBarRight">
+            <button
+              className="roundBtn"
+              aria-label="Поделиться"
+              onClick={async () => {
+                try {
+                  await shareTripHtml({ ...trip, checkpoints: [cp] });
+                } catch (e) {
+                  alert("Не удалось подготовить: " + (e instanceof Error ? e.message : String(e)));
+                }
+              }}
+            >
+              <Icon name="share" size={18} />
+            </button>
             <button className="pillBtn" onClick={() => setEdit(true)}>
               <Icon name="edit" size={16} /> Редактировать
             </button>
@@ -182,6 +196,15 @@ export function MomentView() {
             <span>{fullDate(date, cp.time)}</span>
           </div>
           {cp.description && <p className="mText">{cp.description}</p>}
+          {(cp.meta?.tags?.length ?? 0) > 0 && (
+            <div className="mTags">
+              {cp.meta!.tags!.map((t) => (
+                <Link key={t} className="tagChip" href={`${routes.timeline}?tag=${encodeURIComponent(t)}`}>
+                  #{t}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         <MediaGallery

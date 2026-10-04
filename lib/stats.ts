@@ -5,6 +5,8 @@ import type { Checkpoint, Trip } from "./types";
 export const hasCoords = (c: Checkpoint) => Boolean(c.location && (c.location.lat || c.location.lon));
 
 export function tripKm(t: Trip): number | null {
+  // Загруженный трек GPX точнее прямых между точками.
+  if (t.route?.provider === "gpx" && t.route.distance > 0) return t.route.distance / 1000;
   const pts = t.checkpoints.filter(hasCoords).map((c) => c.location!);
   if (pts.length < 2) return null;
   let km = 0;

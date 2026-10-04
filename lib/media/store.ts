@@ -480,3 +480,23 @@ export function getMediaUrl(id: MediaId, variant: Variant = "thumb"): Promise<st
 export async function listLocalMediaIds(): Promise<MediaId[]> {
   return ((await idb.keys(STORES.meta).catch(() => [])) as string[]) ?? [];
 }
+
+/** Восстановление из архива: метаданные и превью файла, если на устройстве их ещё нет. */
+export async function importMediaPreview(meta: MediaItem, thumb?: Blob): Promise<boolean> {
+  const has = await idb.get<MediaItem>(STORES.meta, meta.id).catch(() => undefined);
+  if (has) return false;
+  await idb.set(STORES.meta, meta.id, { ...meta, drive: undefined });
+  if (thumb) await putBlob(`${meta.id}:thumb`, thumb);
+  return true;
+}
+
+/** Удаляет локальную копию файла (метаданные и все варианты) с устройства. */
+export async function forgetLocalMedia(id: MediaId) {
+  await idb.del(STORES.meta, id).catch(() => undefined);
+  for (const v of ["original", "thumb", "raw"]) await idb.del(STORES.blobs, `${id}:${v}`).catch(() => undefined);
+  for (const v of ["original", "thumb"]) {
+    const u = urlCache.get(`${id}:${v}`);
+    if (u) URL.revokeObjectURL(u);
+    urlCache.delete(`${id}:${v}`);
+  }
+}

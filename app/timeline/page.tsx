@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { TagFilter } from "@/components/Tags";
+import { allTags, tripHasTag } from "@/lib/tags";
 import { TabScreen } from "@/components/BottomNav";
 import { MomentsTabs } from "@/components/MomentsTabs";
 import { MediaImg } from "@/components/media/Media";
@@ -60,10 +63,20 @@ function YearHead({ year, trips }: { year: string; trips: Trip[] }) {
 
 /** Хронология по годам (экран 6): год → месяц → поездки и события. */
 export default function TimelinePage() {
+  return (
+    <Suspense fallback={null}>
+      <Timeline />
+    </Suspense>
+  );
+}
+
+function Timeline() {
   const { trips } = useTrips();
+  const [tag, setTag] = useState<string | null>(useSearchParams().get("tag"));
+  const tags = useMemo(() => allTags(trips ?? []), [trips]);
   const years = useMemo(() => {
     const map = new Map<string, Map<string, Trip[]>>();
-    for (const t of trips ?? []) {
+    for (const t of (trips ?? []).filter((x) => tripHasTag(x, tag))) {
       const y = t.date.slice(0, 4);
       const m = t.date.slice(5, 7);
       if (!map.has(y)) map.set(y, new Map());
@@ -74,7 +87,7 @@ export default function TimelinePage() {
     return [...map.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([y, months]) => ({ y, months: [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])) }));
-  }, [trips]);
+  }, [trips, tag]);
 
   return (
     <TabScreen className="timelinePage">
@@ -84,6 +97,7 @@ export default function TimelinePage() {
         <span className="ahSide right" />
       </header>
       <MomentsTabs active="timeline" />
+      <TagFilter tags={tags} value={tag} onChange={setTag} />
       {trips && trips.length === 0 && <p className="muted">Здесь появится лента ваших воспоминаний по годам.</p>}
       <div className="timeline2">
         {years.map(({ y, months }) => (

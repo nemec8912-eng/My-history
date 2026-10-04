@@ -10,6 +10,7 @@ import { popularPlaces, searchAll } from "@/lib/search";
 import { isEvent, momentDate, tripCover, tripDateRange } from "@/lib/stats";
 import { formatDate } from "@/lib/format";
 import { useTrips } from "@/lib/useTrips";
+import { allTags } from "@/lib/tags";
 
 function Hl({ text, q }: { text: string; q: string }) {
   const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
@@ -31,6 +32,7 @@ export default function SearchPage() {
   useEffect(() => input.current?.focus(), []);
   const res = useMemo(() => searchAll(trips ?? [], q), [trips, q]);
   const popular = useMemo(() => popularPlaces(trips ?? []), [trips]);
+  const tags = useMemo(() => allTags(trips ?? []).slice(0, 20), [trips]);
   const query = q.trim();
 
   return (
@@ -61,6 +63,18 @@ export default function SearchPage() {
                     </div>
                     <span>{t.title}</span>
                   </Link>
+                ))}
+              </div>
+            </section>
+          )}
+          {tags.length > 0 && (
+            <section className="homeSection">
+              <h2 className="secTitle">Метки</h2>
+              <div className="tagChips">
+                {tags.map(({ tag, count }) => (
+                  <button key={tag} className="tagChip" onClick={() => setQ("#" + tag)}>
+                    #{tag} <em>{count}</em>
+                  </button>
                 ))}
               </div>
             </section>

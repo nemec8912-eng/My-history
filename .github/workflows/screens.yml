@@ -30,6 +30,7 @@ jobs:
           node e2e/screens.mjs
           node e2e/edit.mjs
           node e2e/features.mjs
+          node e2e/features2.mjs
       - name: Publish to ci-screens branch
         run: |
           cd screens

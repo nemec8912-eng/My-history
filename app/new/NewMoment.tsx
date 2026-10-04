@@ -9,11 +9,13 @@ import { PlacePicker } from "@/components/PlacePicker";
 import { addMediaFiles } from "@/lib/media/store";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, newTrip } from "@/lib/repo";
-import { routes } from "@/lib/routes";
+import { asset, routes } from "@/lib/routes";
 import { isEvent } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import { fetchWeather } from "@/lib/weather";
-import { reverseInfo } from "@/lib/geocode";
+import { currentPosition, reverseInfo } from "@/lib/geocode";
+import { TagInput, useAllTags } from "@/components/Tags";
+import { appendSpoken, VoiceButton } from "@/components/VoiceInput";
 import type { CheckpointMeta, Location, MediaItem, Weather } from "@/lib/types";
 
 type MType = NonNullable<CheckpointMeta["type"]>;
@@ -35,7 +37,10 @@ const withTimeout = <T,>(p: Promise<T>, ms: number) => Promise.race([p, new Prom
 /** «Новый момент» (экран 5): тип → место → время → описание → сохранить. */
 export function NewMoment() {
   const router = useRouter();
-  const preset = useSearchParams().get("trip");
+  const sp = useSearchParams();
+  const preset = sp.get("trip");
+  const quick = sp.get("quick") === "1";
+  const [quickNote, setQuickNote] = useState<string | null>(null);
   const { trips } = useTrips();
   const [type, setType] = useState<MType>("photo");
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -44,6 +49,8 @@ export function NewMoment() {
   const [when, setWhen] = useState(nowLocal());
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const tagHints = useAllTags();
   const [target, setTarget] = useState<string>(preset ?? "event");
   const [weather, setWeather] = useState<Weather | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,6 +59,21 @@ export function NewMoment() {
   useEffect(() => {
     if (preset) setTarget(preset);
   }, [preset]);
+
+  // «Быстрый момент»: время — сейчас, место — где вы находитесь. Остаётся только снять фото и сохранить.
+  useEffect(() => {
+    if (!quick) return;
+    setWhen(nowLocal());
+    setQuickNote("Определяю, где вы…");
+    currentPosition()
+      .then(async (p) => {
+        setLoc({ lat: p.lat, lon: p.lon });
+        setQuickNote("Место и время уже заполнены — сделайте фото и сохраните.");
+        const info = await reverseInfo(p.lat, p.lon, 16);
+        if (info) setLoc((l) => (l && l.lat === p.lat ? { ...l, label: Array.from(new Set([info.place, info.city, info.state].filter(Boolean))).join(", ") } : l));
+      })
+      .catch(() => setQuickNote("Не удалось определить место — выберите его ниже или сохраните без места."));
+  }, [quick]);
 
   // Погода подтягивается автоматически, когда известны место и время.
   useEffect(() => {
@@ -114,7 +136,7 @@ export function NewMoment() {
         location: loc,
         mediaIds: media.map((m) => m.id),
         coverMediaId: firstImage?.id,
-        meta: { date, type, ...(w ? { weather: w } : {}) },
+        meta: { date, type, ...(w ? { weather: w } : {}), ...(tags.length ? { tags } : {}) },
       });
       const repo = await getRepo();
       let tripId: string;
@@ -137,7 +159,9 @@ export function NewMoment() {
         await repo.save({ ...t, checkpoints: list, updatedAt: new Date().toISOString() });
         tripId = t.id;
       }
-      router.replace(routes.moment(tripId, cp.id));
+      // Без сети переход внутри приложения не загрузится — открываем страницу из кэша приложения.
+      if (typeof navigator !== "undefined" && !navigator.onLine) window.location.assign(asset(routes.moment(tripId, cp.id)));
+      else router.replace(routes.moment(tripId, cp.id));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setSaving(false);
@@ -168,6 +192,8 @@ export function NewMoment() {
         ))}
       </div>
 
+      {quickNote && <p className="okBar">⚡ {quickNote}</p>}
+
       <Link className="impLink" href={routes.importPhotos}>
         <Icon name="grid" size={18} /> Импорт из галереи: много фото сразу, по дням и местам
         <Icon name="chevron" size={16} />
@@ -190,8 +216,8 @@ export function NewMoment() {
           ) : (
             <label className="nmDrop">
               <Icon name={type === "video" ? "video" : "photo"} size={34} />
-              <span>{busyMedia ? "Сохраняю…" : type === "video" ? "Выбрать или снять видео" : "Выбрать или сделать фото"}</span>
-              <input type="file" accept={accept} multiple onChange={pick} />
+              <span>{busyMedia ? "Сохраняю…" : quick ? (type === "video" ? "Снять видео" : "Сделать фото") : type === "video" ? "Выбрать или снять видео" : "Выбрать или сделать фото"}</span>
+              {quick ? <input type="file" accept={accept} capture="environment" onChange={pick} /> : <input type="file" accept={accept} multiple onChange={pick} />}
             </label>
           )}
           {preview && (
@@ -226,7 +252,9 @@ export function NewMoment() {
         <div className="nmRow col">
           <span className="nmLabel">Описание</span>
           <textarea rows={type === "note" ? 6 : 3} placeholder="Напишите, что запомнилось…" value={text} onChange={(e) => setText(e.target.value)} />
+          <VoiceButton onText={(t) => setText((p) => appendSpoken(p, t))} />
           <input placeholder="Название (необязательно)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <TagInput value={tags} onChange={setTags} suggestions={tagHints} />
         </div>
         <div className="nmRow">
           <span className="nmLabel">

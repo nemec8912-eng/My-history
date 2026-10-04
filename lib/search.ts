@@ -27,7 +27,7 @@ export function searchAll(trips: Trip[], query: string) {
   if (!q) return { trips: [] as Trip[], moments: [] as MomentHit[] };
   const tripHits = trips
     .map((t) => {
-      const text = [t.title, t.place, t.description, kindLabel(t), tripDateRange(t), dateWords(t.date)].filter(Boolean).join(" ");
+      const text = [t.title, t.place, t.description, kindLabel(t), tripDateRange(t), dateWords(t.date), ...t.checkpoints.flatMap((c) => c.meta?.tags ?? [])].filter(Boolean).join(" ");
       return { t, s: score(text, t.title, q) };
     })
     .filter((x) => x.s >= 0)
@@ -36,7 +36,7 @@ export function searchAll(trips: Trip[], query: string) {
   const moments: MomentHit[] = [];
   for (const t of trips) {
     for (const c of t.checkpoints) {
-      const text = [c.title, c.description, c.location?.label, dateWords(momentDate(t, c)), ...(c.place?.moments.map((m) => `${m.title} ${m.description ?? ""}`) ?? [])].filter(Boolean).join(" ");
+      const text = [c.title, c.description, c.location?.label, c.meta?.address, ...(c.meta?.tags ?? []).map((x) => `#${x} ${x}`), dateWords(momentDate(t, c)), ...(c.place?.moments.map((m) => `${m.title} ${m.description ?? ""}`) ?? [])].filter(Boolean).join(" ");
       const s = score(text, c.title, q);
       if (s >= 0) moments.push({ trip: t, cp: c, score: s });
     }

@@ -4,6 +4,7 @@ import "./globals.css";
 import { RegisterSW } from "@/components/RegisterSW";
 import { DriveBanner } from "@/components/DriveSection";
 import { OfflineBar } from "@/components/OfflineBar";
+import { AppLock } from "@/components/AppLock";
 
 export const metadata: Metadata = {
   title: "Моя история",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <RegisterSW />
         <DriveBanner />
         <OfflineBar />
+        <AppLock />
       </body>
     </html>
   );

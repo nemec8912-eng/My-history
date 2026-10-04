@@ -258,6 +258,17 @@ export default function Home() {
 
       {thisDay[0] && <ThisDayCard hit={thisDay[0]} />}
 
+      {trips && trips.length > 0 && (
+        <div className="quickRow">
+          <Link className="quickBtn" href={routes.quick}>
+            <b>⚡</b> Момент сейчас
+          </Link>
+          <Link className="quickBtn" href={routes.year(String(new Date().getMonth() < 1 ? new Date().getFullYear() - 1 : new Date().getFullYear()))}>
+            <b>🏆</b> Итоги года
+          </Link>
+        </div>
+      )}
+
       {trips && trips.length === 0 && (
         <section className="welcome">
           <h2>Ваши воспоминания начнутся здесь</h2>

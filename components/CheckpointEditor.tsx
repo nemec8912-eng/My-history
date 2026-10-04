@@ -8,6 +8,8 @@ import { MediaGallery, MediaPicker } from "./media/Media";
 import { PointMarker } from "./PointMarker";
 import { PlacePicker } from "./PlacePicker";
 import { reverseGeocode } from "@/lib/geocode";
+import { TagInput, useAllTags } from "./Tags";
+import { appendSpoken, VoiceButton } from "./VoiceInput";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
 const MapPointPicker = dynamic(() => import("./map/MapPointPicker").then((m) => m.MapPointPicker), { ssr: false });
@@ -53,6 +55,7 @@ export function CheckpointEditor({
   const setMeta = (patch: Partial<NonNullable<Checkpoint["meta"]>>, resetWeather = false) =>
     setCp((c) => ({ ...c, meta: { ...c.meta, ...patch, ...(resetWeather ? { weather: undefined } : {}) } }));
   const [showMap, setShowMap] = useState(false);
+  const tagHints = useAllTags();
 
   return (
     <form
@@ -118,6 +121,7 @@ export function CheckpointEditor({
       <label>
         Описание
         <textarea rows={3} value={cp.description ?? ""} onChange={(e) => set({ description: e.target.value || undefined })} placeholder="Что здесь было?" />
+        <VoiceButton onText={(t) => setCp((c) => ({ ...c, description: appendSpoken(c.description ?? "", t) }))} />
       </label>
 
       <div className="fieldBlock">
@@ -155,6 +159,11 @@ export function CheckpointEditor({
         Адрес
         <input value={cp.meta?.address ?? ""} onChange={(e) => setMeta({ address: e.target.value || undefined })} placeholder="Улица, дом (необязательно)" />
       </label>
+
+      <div className="fieldBlock">
+        <span className="fieldLabel">Метки</span>
+        <TagInput value={cp.meta?.tags ?? []} onChange={(tags) => setMeta({ tags: tags.length ? tags : undefined })} suggestions={tagHints} />
+      </div>
 
       <label>
         Значок

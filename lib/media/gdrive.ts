@@ -258,3 +258,15 @@ export async function driveQuota(): Promise<{ used: number; limit: number | null
   const q = (await res.json()).storageQuota ?? {};
   return { used: Number(q.usage ?? 0), limit: q.limit ? Number(q.limit) : null };
 }
+
+/** Удаляет файл приложения с Google Диска (в корзину Диска; права drive.file — только файлы, созданные приложением). */
+export async function deleteFromDrive(fileId: string): Promise<boolean> {
+  const token = getDriveToken();
+  if (!token) throw new Error("NO_TOKEN");
+  const res = await api(`/drive/v3/files/${encodeURIComponent(fileId)}`, token, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
+  return res.ok || res.status === 404;
+}

@@ -16,6 +16,8 @@ import { Icon } from "@/components/Icon";
 import dynamic from "next/dynamic";
 import { fmtKm, hasCoords, isEvent, kmByMode, tripCover, tripDateRange, tripDays, tripKm, tripMediaIds, tripPlaces } from "@/lib/stats";
 import { TRAVEL } from "@/lib/travel";
+import { parseGpx, routeCoords } from "@/lib/gpx";
+import { shareTripHtml } from "@/lib/shareHtml";
 import { formatDate, formatDuration, minutesOf, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
@@ -55,6 +57,57 @@ function TripStatTiles({ trip }: { trip: Trip }) {
       </p>
     )}
     </>
+  );
+}
+
+/** Действия с поездкой: видео-итог, поделиться, трек GPX. */
+function TripActions({ trip, onTrack }: { trip: Trip; onTrack: (r: Trip["route"]) => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const hasPhotos = trip.checkpoints.some((c) => c.coverMediaId || c.mediaIds.length);
+  async function share() {
+    setBusy("share");
+    try {
+      await shareTripHtml(trip, (s) => setBusy(s));
+    } catch (e) {
+      alert("Не удалось подготовить: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function gpx(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      const r = parseGpx(await f.text());
+      onTrack(r);
+      alert(`Трек загружен: ${fmtKm(r.distance / 1000)} км.`);
+    } catch (er) {
+      alert(er instanceof Error ? er.message : String(er));
+    }
+  }
+  return (
+    <div className="tripActions">
+      {hasPhotos && (
+        <Link className="taBtn" href={routes.recap(trip.id)}>
+          <Icon name="play" size={18} /> Видео-итог
+        </Link>
+      )}
+      <button className="taBtn" onClick={share} disabled={Boolean(busy)}>
+        <Icon name="share" size={18} /> {busy ? (busy.length > 8 ? busy : "Готовлю…") : "Поделиться"}
+      </button>
+      {!isEvent(trip) &&
+        (trip.route?.provider === "gpx" ? (
+          <button className="taBtn" onClick={() => confirm("Убрать загруженный трек? Маршрут снова будет по точкам.") && onTrack(undefined)}>
+            <Icon name="route" size={18} /> Убрать трек
+          </button>
+        ) : (
+          <label className="taBtn">
+            <Icon name="route" size={18} /> Трек GPX
+            <input type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden onChange={gpx} />
+          </label>
+        ))}
+    </div>
   );
 }
 
@@ -192,6 +245,7 @@ export function TripView() {
       {tab === "overview" && (
         <section className="tabBody">
           <TripStatTiles trip={trip} />
+          <TripActions trip={trip} onTrack={(route) => update({ ...trip, route })} />
           {trip.description && <p className="tripDesc">{trip.description}</p>}
           {located.length > 0 && (
             <div className="miniMap">
@@ -199,7 +253,13 @@ export function TripView() {
                 interactive={false}
                 labels={false}
                 points={located.map((c) => ({ id: c.id, lat: c.location!.lat, lon: c.location!.lon, color: c.style.color, photoId: c.coverMediaId, icon: c.icon ?? "📍", big: c.kind === "end" }))}
-                lines={event || located.length < 2 ? [] : [{ id: trip.id, color: "#2f7bff", coords: located.map((c) => [c.location!.lat, c.location!.lon]) }]}
+                lines={
+                  routeCoords(trip.route).length > 1
+                    ? [{ id: trip.id, color: "#2f7bff", coords: routeCoords(trip.route) }]
+                    : event || located.length < 2
+                      ? []
+                      : [{ id: trip.id, color: "#2f7bff", coords: located.map((c) => [c.location!.lat, c.location!.lon]) }]
+                }
               />
               <Link className="mapExpand" href={`${routes.map}?trip=${encodeURIComponent(trip.id)}`} aria-label="Открыть на карте">
                 <Icon name="map" size={18} />

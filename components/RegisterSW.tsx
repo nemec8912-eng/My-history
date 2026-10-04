@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { syncPendingUploads } from "@/lib/media/store";
 import { asset } from "@/lib/routes";
+import { checkRemindersOnOpen } from "@/lib/reminders";
 
 /** Регистрирует service worker и догружает в облако файлы, сохранённые без сети. */
 export function RegisterSW() {
@@ -11,6 +12,7 @@ export function RegisterSW() {
       navigator.serviceWorker.register(asset("/sw.js"), { scope: asset("/") }).catch(() => undefined);
     }
     void syncPendingUploads();
+    setTimeout(checkRemindersOnOpen, 4000);
     const online = () => void syncPendingUploads();
     window.addEventListener("online", online);
     return () => window.removeEventListener("online", online);

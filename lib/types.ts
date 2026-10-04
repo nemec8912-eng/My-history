@@ -76,6 +76,8 @@ export type CheckpointMeta = {
   address?: string;
   /** Тип момента при создании: фото, видео, аудио или заметка. */
   type?: "photo" | "video" | "audio" | "note";
+  /** Свои метки: «рыбалка», «дача», «концерт». */
+  tags?: string[];
 };
 
 export type TripMeta = {

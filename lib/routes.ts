@@ -18,6 +18,9 @@ export const routes = {
   search: "/search/",
   me: "/me/",
   importPhotos: "/import/",
+  quick: "/new/?quick=1",
+  year: (y?: string) => (y ? `/year/?y=${y}` : "/year/"),
+  recap: (tripId: string) => `/recap/?trip=${encodeURIComponent(tripId)}`,
   trash: "/trash/",
   stats: "/stats/",
 };

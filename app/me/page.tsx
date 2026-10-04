@@ -6,6 +6,7 @@ import { AccountPanel } from "@/components/AccountSheet";
 import { TabScreen } from "@/components/BottomNav";
 import { useDriveState } from "@/components/DriveSection";
 import { Icon } from "@/components/Icon";
+import { MeTools } from "@/components/MeTools";
 import { routes } from "@/lib/routes";
 import { getUserId, isCloudConfigured } from "@/lib/supabase";
 
@@ -57,6 +58,7 @@ export default function MePage() {
       <div className="settingsList meLinks">
         {[
           { href: routes.stats, icon: "map", label: "Статистика и регионы" },
+          { href: routes.year(), icon: "star", label: "Итоги года" },
           { href: routes.importPhotos, icon: "grid", label: "Импорт из галереи" },
           { href: routes.trash, icon: "trash", label: "Корзина" },
         ].map((l) => (
@@ -67,6 +69,7 @@ export default function MePage() {
           </Link>
         ))}
       </div>
+      {mounted && <MeTools />}
       <div className="meCard">
         <AccountPanel onChanged={() => setTick((t) => t + 1)} />
       </div>
