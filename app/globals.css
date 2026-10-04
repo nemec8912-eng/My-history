@@ -350,3 +350,5 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .tripRowText { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .tripRowText strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tripRowChevron { color: #6f6b8e; font-size: 24px; font-weight: 700; }
+.storyCard.mini .storyCardTitle { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.destCover { background: linear-gradient(150deg, #3a2a7a, #1a1533); }
