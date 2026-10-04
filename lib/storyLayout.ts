@@ -46,7 +46,30 @@ export type StoryLayout = {
   width: number;
   height: number;
   labelWidth: number;
+  /** Примерная высота карточки рядом с точкой. */
+  cardH: number;
+  upward: boolean;
 };
+
+export type LayoutOptions = {
+  /** Путь идёт снизу вверх: первая точка внизу, финиш наверху. */
+  upward?: boolean;
+  /** Множитель расстояний между точками (компактный предпросмотр < 1). */
+  density?: number;
+  /** Маленькие карточки (только название). */
+  mini?: boolean;
+};
+
+/** Отражает все координаты Y в строке пути SVG (M/C с парами x y). */
+function flipPathY(d: string, H: number): string {
+  let i = 0;
+  return d.replace(/-?\d+(?:\.\d+)?/g, (num) => {
+    const v = Number(num);
+    const out = i % 2 === 1 ? String(Math.round((H - v) * 10) / 10) : num;
+    i++;
+    return out;
+  });
+}
 
 type P = { x: number; y: number };
 
@@ -82,11 +105,18 @@ export function markerDiameter(cp: Checkpoint, hasPhoto: boolean): number {
   return Math.round(d);
 }
 
-export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint) => boolean): StoryLayout {
+export function layoutStory(
+  trip: Trip,
+  width: number,
+  hasCover: (cp: Checkpoint) => boolean,
+  opts: LayoutOptions = {}
+): StoryLayout {
+  const density = opts.density ?? 1;
+  const mini = Boolean(opts.mini);
   const W = Math.max(280, Math.round(width));
   const pad = 12;
   const gapLabel = 10;
-  const labelWidth = Math.round(clamp(W * 0.44, 132, 250));
+  const labelWidth = mini ? Math.round(clamp(W * 0.36, 104, 190)) : Math.round(clamp(W * 0.44, 132, 250));
   const cps = trip.checkpoints;
   const n = cps.length;
   const nodes: StoryNode[] = [];
@@ -99,7 +129,7 @@ export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint
     const cp = cps[i];
     const rand = seeded(`${trip.id}:${cp.id}`);
     const photo = hasCover(cp);
-    const d = markerDiameter(cp, photo);
+    const d = Math.round(markerDiameter(cp, photo) * (mini ? 0.82 : 1));
 
     // Сторона экрана: чаще чередуется, иногда несколько точек подряд остаются на одной стороне.
     const prevHalf = half;
@@ -143,8 +173,8 @@ export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint
       if (a && b) gap += Math.min(80, Math.log2(1 + haversineKm(a, b)) * 13);
       if (photo || hasCover(cps[i - 1])) gap += 10;
       if (cp.kind === "end") gap += 34;
-      if (half === prevHalf) gap = Math.max(gap, 124);
-      y += Math.max(gap, 100);
+      if (half === prevHalf) gap = Math.max(gap, mini ? 70 : 124);
+      y += Math.max(gap * density, mini ? 58 : 100);
     }
 
     nodes.push({ cp, index: i, x: r1(x), y: r1(y), d, side, photoMarker: photo && cp.style.showPhoto });
@@ -224,7 +254,19 @@ export function layoutStory(trip: Trip, width: number, hasCover: (cp: Checkpoint
   for (let j = 0; j < pts.length - 1; j++) fullPath += " " + curve(j);
 
   const last = nodes[nodes.length - 1];
-  const height = last ? Math.ceil(last.y + Math.max(last.d / 2, 56) + 28) : 200;
+  const height = last ? Math.ceil(last.y + Math.max(last.d / 2, mini ? 30 : 56) + 28) : 200;
+  const cardH = mini ? 44 : 84;
+  const upward = Boolean(opts.upward);
 
-  return { nodes, segments, fullPath, width: W, height, labelWidth };
+  if (upward) {
+    for (const n of nodes) n.y = r1(height - n.y);
+    for (const sg of segments) {
+      sg.d = flipPathY(sg.d, height);
+      sg.y1 = r1(height - sg.y1);
+      sg.y2 = r1(height - sg.y2);
+    }
+    fullPath = flipPathY(fullPath, height);
+  }
+
+  return { nodes, segments, fullPath, width: W, height, labelWidth, cardH, upward };
 }

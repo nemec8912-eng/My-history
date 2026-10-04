@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { MediaImg, MediaPicker } from "@/components/media/Media";
 import { Sheet } from "@/components/Sheet";
 import { AccountSheet } from "@/components/AccountSheet";
+import { StoryRoute } from "@/components/story/StoryRoute";
 import { getSupabase } from "@/lib/supabase";
 import { routes } from "@/lib/routes";
 import { formatDate, plural } from "@/lib/format";
@@ -13,7 +14,15 @@ import { createCheckpoint } from "@/lib/markerStyle";
 import { getRepo, localTripCount, newTrip } from "@/lib/repo";
 import type { Checkpoint, Trip } from "@/lib/types";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+}
 
 function demoTrip(): Trip {
   const p = (title: string, time: string, icon: string, color: string, extra: Partial<Checkpoint> = {}) =>
@@ -87,6 +96,9 @@ export default function Home() {
     return () => data.subscription.unsubscribe();
   }, [reload]);
 
+  const latest = trips && trips.length ? trips[0] : null;
+  const rest = trips ? trips.slice(1) : [];
+
   const totals = useMemo(() => {
     const list = trips ?? [];
     return {
@@ -129,22 +141,46 @@ export default function Home() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Личный дневник</p>
+          <p className="eyebrow">{greeting()}</p>
           <h1>Моя история</h1>
         </div>
         <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount("signin")}>Я</button>
       </header>
 
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Твои воспоминания</p>
-          <h2>Каждая поездка — отдельная история пути</h2>
-          <p className="muted">Свой маршрут из контрольных точек, фото, видео и голосовые заметки — в одном событии.</p>
-        </div>
-        <div className="heroActions">
-          <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
-        </div>
-      </section>
+      {latest ? (
+        <section className="journey" aria-label="Последняя поездка">
+          <div className="journeyHead">
+            <div>
+              <p className="eyebrow">Последняя поездка</p>
+              <h2>{latest.title}</h2>
+              <p className="journeyMeta">
+                {formatDate(latest.date)}
+                {latest.place ? ` · ${latest.place}` : ""} · {latest.checkpoints.length} {plural(latest.checkpoints.length, "точка", "точки", "точек")}
+              </p>
+            </div>
+            <Link className="journeyOpen" href={routes.trip(latest.id)} aria-label="Открыть поездку">›</Link>
+          </div>
+          <div className="nightPanel">
+            <StoryRoute trip={latest} preview onOpen={() => router.push(routes.trip(latest.id))} />
+          </div>
+          <div className="journeyActions">
+            <Link className="primary" href={routes.trip(latest.id)}>Открыть историю</Link>
+            <button className="ghostLight" onClick={() => setOpen(true)}>+ Новая поездка</button>
+          </div>
+        </section>
+      ) : (
+        <section className="hero">
+          <div>
+            <p className="eyebrow">Твои воспоминания</p>
+            <h2>Каждая поездка — отдельная история пути</h2>
+            <p className="muted">Отмечай точки пути снизу вверх: фото, заметки, адреса — и маршрут волной соединит их в историю.</p>
+          </div>
+          <div className="heroActions">
+            <button className="primary" onClick={() => setOpen(true)}>+ Новая поездка</button>
+            {trips && <button className="softBtn" disabled={busy} onClick={() => create(demoTrip())}>Открыть пример</button>}
+          </div>
+        </section>
+      )}
 
       {authNote && <p className="errorBar">{authNote}</p>}
 
@@ -161,8 +197,11 @@ export default function Home() {
 
       <section className="section">
         <div className="sectionTitle">
-          <h3>Мои поездки</h3>
+          <h3>{latest ? "Все поездки" : "Мои поездки"}</h3>
+          {latest && <button className="ghost" onClick={() => setOpen(true)}>+ Новая</button>}
         </div>
+
+        {latest && rest.length === 0 && <p className="muted small">Здесь появятся остальные поездки.</p>}
 
         {trips && trips.length === 0 && (
           <div className="emptyCard">
@@ -174,22 +213,24 @@ export default function Home() {
           </div>
         )}
 
-        <div className="timeline">
-          {trips?.map((t) => {
+        <div className="tripRows">
+          {rest.map((t) => {
             const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
             const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
+            const end = t.checkpoints[t.checkpoints.length - 1];
             return (
-              <Link className="card" key={t.id} href={routes.trip(t.id)}>
-                <div className="datePill">{formatDate(t.date)}{t.time ? ` · ${t.time}` : ""}</div>
-                <div className="photoPlaceholder">
-                  {cover ? <MediaImg id={cover} variant="original" className="coverImg" /> : "Обложка поездки"}
-                  {media > 0 && <span className="photoCount">{media} {plural(media, "файл", "файла", "файлов")}</span>}
-                </div>
-                <div className="cardBody">
-                  <p className="place">{t.place || "Место не указано"}</p>
-                  <h4>{t.title}</h4>
-                  <p className="muted">{t.description || `${t.checkpoints.length} ${plural(t.checkpoints.length, "точка", "точки", "точек")} маршрута`}</p>
-                </div>
+              <Link className="tripRow" key={t.id} href={routes.trip(t.id)}>
+                <span className="tripRowCover" style={{ background: end?.style.color }}>
+                  {cover ? <MediaImg id={cover} /> : <span>{end?.icon ?? "★"}</span>}
+                </span>
+                <span className="tripRowText">
+                  <strong>{t.title}</strong>
+                  <span className="muted small">
+                    {formatDate(t.date)} · {t.checkpoints.length} {plural(t.checkpoints.length, "точка", "точки", "точек")}
+                    {media ? ` · ${media} ${plural(media, "файл", "файла", "файлов")}` : ""}
+                  </span>
+                </span>
+                <span className="tripRowChevron">›</span>
               </Link>
             );
           })}

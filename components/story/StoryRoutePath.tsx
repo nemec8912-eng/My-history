@@ -17,7 +17,7 @@ export function StoryRoutePath({ layout }: { layout: StoryLayout }) {
   useEffect(() => {
     const R = 17;
     const boxes = layout.nodes.flatMap((n) => {
-      const cardH = n.cp.kind === "end" ? 96 : 84;
+      const cardH = n.cp.kind === "end" ? layout.cardH + 12 : layout.cardH;
       const cardX1 = n.side === "right" ? n.x + n.d / 2 + 6 : n.x - n.d / 2 - 14 - layout.labelWidth;
       return [
         { x1: cardX1 - R, x2: cardX1 + layout.labelWidth + 8 + R, y1: n.y - cardH / 2 - R, y2: n.y + cardH / 2 + R },
@@ -121,7 +121,7 @@ export function StoryRoutePath({ layout }: { layout: StoryLayout }) {
       {layout.segments.map((s, i) =>
         s.mode && mids[i] && mids[i].y ? (
           <g key={`b-${s.id}`} className="travelBadge" transform={`translate(${mids[i].x} ${mids[i].y})`} style={{ animationDelay: `${0.6 + i * 0.08}s` }}>
-            <circle r="15" fill="#fff" stroke={safeColor(s.colorB)} strokeWidth="2" />
+            <circle r="15" className="badgeBg" stroke={safeColor(s.colorB)} strokeWidth="2" />
             <text textAnchor="middle" dominantBaseline="central" fontSize="15">
               {TRAVEL[s.mode].icon}
             </text>

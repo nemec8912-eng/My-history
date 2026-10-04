@@ -24,16 +24,30 @@ export function StoryPointPreview({
   node,
   style,
   onOpen,
+  mini,
 }: {
   node: StoryNode;
   style: CSSProperties;
   onOpen: () => void;
+  mini?: boolean;
 }) {
   const { cp, index, photoMarker, side } = node;
   const thumb = !photoMarker && cp.coverMediaId;
   const isEnd = cp.kind === "end";
   const subtitle = isEnd && cp.place ? "Основная локация" : cp.description || cp.location?.label;
   const count = cp.mediaIds.length;
+  if (mini) {
+    return (
+      <button type="button" className={`storyCard mini ${side} ${isEnd ? "end" : ""}`} style={style} onClick={onOpen}>
+        <span className="storyCardText">
+          <span className="storyCardTitle">
+            <span className="storyNum" style={{ color: cp.style.color }}>{index + 1}.</span> {cp.title || "Без названия"}
+          </span>
+          {cp.time && <span className="storyTime">{cp.time}</span>}
+        </span>
+      </button>
+    );
+  }
   return (
     <button type="button" className={`storyCard ${side} ${isEnd ? "end" : ""}`} style={style} onClick={onOpen}>
       <span className="storyCardText">
@@ -58,11 +72,13 @@ export function StoryPoint({
   width,
   labelWidth,
   onOpen,
+  mini,
 }: {
   node: StoryNode;
   width: number;
   labelWidth: number;
   onOpen: (cp: Checkpoint) => void;
+  mini?: boolean;
 }) {
   const { x, y, d, side, cp } = node;
   const delay = { animationDelay: `${0.25 + Math.min(node.index, 30) * 0.08}s` };
@@ -81,7 +97,7 @@ export function StoryPoint({
       >
         <StoryPointMarker node={node} />
       </button>
-      <StoryPointPreview node={node} style={cardStyle} onOpen={() => onOpen(cp)} />
+      <StoryPointPreview node={node} style={cardStyle} onOpen={() => onOpen(cp)} mini={mini} />
     </>
   );
 }

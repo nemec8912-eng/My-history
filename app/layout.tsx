@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Моя история",
   description: "Личный дневник поездок и воспоминаний",
   applicationName: "Моя история",
-  appleWebApp: { capable: true, title: "Моя история", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Моя история", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
 };
 
@@ -14,7 +14,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f5f6fb",
+  themeColor: "#0f0d1c",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
