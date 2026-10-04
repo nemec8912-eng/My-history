@@ -76,6 +76,10 @@ export function loadGis(): Promise<void> {
  * (иначе браузер заблокирует окно входа Google).
  */
 export function connectDrive(): Promise<string> {
+  if (isStandalone()) {
+    connectDriveRedirect();
+    return new Promise<string>(() => undefined); // страница уходит на Google
+  }
   return loadGis().then(
     () =>
       new Promise<string>((resolve, reject) => {
@@ -98,11 +102,75 @@ export function connectDrive(): Promise<string> {
           resolve(resp.access_token);
         };
         tokenClient.error_callback = (err: any) => {
+          if (err?.type === "popup_failed_to_open") {
+            connectDriveRedirect(); // браузер заблокировал окно — входим переходом на страницу Google
+            return;
+          }
           reject(new Error(err?.type === "popup_closed" ? "Окно входа Google закрыто" : err?.message || "Ошибка входа Google"));
         };
         tokenClient.requestAccessToken({ prompt: isDriveEnabled() ? "" : "consent" });
       })
   );
+}
+
+/* ───────── Вход переходом на страницу Google (для PWA на iPhone) ───────── */
+
+const REDIRECT_PATH = "/gdrive/";
+let captured: { returnTo: string | null; error: string | null } | null | undefined;
+
+function basePath(): string {
+  return process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+}
+
+/** Приложение открыто с главного экрана (standalone): всплывающие окна там ненадёжны. */
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+}
+
+/** Переходит на страницу Google для выдачи доступа; после согласия вернёт на /gdrive/ с токеном. */
+export function connectDriveRedirect(silent = false) {
+  const redirect = window.location.origin + basePath() + REDIRECT_PATH;
+  const returnTo = window.location.pathname + window.location.search;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirect,
+    response_type: "token",
+    scope: SCOPE,
+    include_granted_scopes: "true",
+    state: "gdrive:" + returnTo,
+  });
+  if (silent) params.set("prompt", "none");
+  else if (!isDriveEnabled()) params.set("prompt", "consent");
+  window.location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + params.toString());
+}
+
+/**
+ * Забирает токен из адреса после возврата со страницы Google (#access_token=…&state=gdrive:…).
+ * Идемпотентно: повторный вызов возвращает тот же результат.
+ */
+export function captureDriveRedirect(): { returnTo: string | null; error: string | null } | null {
+  if (captured !== undefined) return captured;
+  if (typeof window === "undefined") return null;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const state = hash.get("state") ?? "";
+  if (!state.startsWith("gdrive:")) {
+    captured = null;
+    return null;
+  }
+  const token = hash.get("access_token");
+  const error = hash.get("error");
+  if (token) {
+    ls()?.setItem(LS_TOKEN, JSON.stringify({ token, exp: Date.now() + Number(hash.get("expires_in") ?? 3600) * 1000 }));
+    ls()?.setItem(LS_ENABLED, "1");
+  }
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  captured = {
+    returnTo: state.slice("gdrive:".length) || null,
+    error: token ? null : error === "access_denied" ? "Доступ к Google Диску не выдан" : error || "Не удалось подключить Google Диск",
+  };
+  emit();
+  return captured;
 }
 
 export function disconnectDrive() {

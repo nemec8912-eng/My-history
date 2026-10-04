@@ -285,6 +285,7 @@ export async function addMedia(file: File): Promise<MediaItem> {
   let width: number | undefined;
   let height: number | undefined;
 
+  if (kind === "video") thumb = await videoPoster(file).catch(() => null);
   if (kind === "image") {
     try {
       const p = await processImage(file);
@@ -357,7 +358,9 @@ export function getMediaUrl(id: MediaId, variant: Variant = "thumb"): Promise<st
     let blob =
       (await idb.get<Blob>(STORES.blobs, key).catch(() => undefined)) ??
       (variant === "original" ? await idb.get<Blob>(STORES.blobs, `${id}:raw`).catch(() => undefined) : undefined) ??
-      (variant === "thumb" ? await idb.get<Blob>(STORES.blobs, `${id}:original`).catch(() => undefined) : undefined) ??
+      (variant === "thumb" && (await idb.get<MediaItem>(STORES.meta, id).catch(() => undefined))?.kind !== "video"
+        ? await idb.get<Blob>(STORES.blobs, `${id}:original`).catch(() => undefined)
+        : undefined) ??
       null;
     if (!blob) blob = await downloadFromCloud(id, variant).catch(() => null);
     if (!blob && variant === "original") {

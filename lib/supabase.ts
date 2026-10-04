@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { CLOUD } from "./cloud.config";
+import { captureDriveRedirect } from "./media/gdrive";
 
 let client: SupabaseClient | null | undefined;
 
@@ -12,6 +13,8 @@ export function getSupabase(): SupabaseClient | null {
     if (typeof window !== "undefined") client = null;
     return null;
   }
+  // Токен Google Диска в адресе не должен попасть к Supabase (он тоже читает #access_token).
+  captureDriveRedirect();
   client = createClient(url, anonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });

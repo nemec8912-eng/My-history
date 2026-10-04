@@ -22,10 +22,11 @@ export function MediaImg({
 }
 
 function VideoThumb({ id }: { id: string }) {
-  const url = useMediaUrl(id, "original");
+  // Сначала кадр-обложка (лёгкий); сам ролик загружается только при открытии.
+  const poster = useMediaUrl(id, "thumb");
   return (
     <span className="videoThumb">
-      {url ? <video src={url + "#t=0.1"} muted playsInline preload="metadata" /> : <span className="imgPlaceholder" />}
+      {poster ? <img src={poster} alt="" loading="lazy" /> : <span className="imgPlaceholder videoPh">🎬</span>}
       <span className="playBadge">▶</span>
     </span>
   );
