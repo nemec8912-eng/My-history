@@ -7,6 +7,7 @@ import type { Checkpoint, MediaItem } from "@/lib/types";
 import { MediaGallery, MediaPicker } from "./media/Media";
 import { PointMarker } from "./PointMarker";
 import { PlacePicker } from "./PlacePicker";
+import { reverseGeocode } from "@/lib/geocode";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
 const MapPointPicker = dynamic(() => import("./map/MapPointPicker").then((m) => m.MapPointPicker), { ssr: false });
@@ -123,7 +124,14 @@ export function CheckpointEditor({
         <span className="fieldLabel">Место</span>
         <PlacePicker
           value={cp.location}
-          onChange={(loc) => setCp((c) => ({ ...c, location: loc, meta: { ...c.meta, weather: undefined } }))}
+          onChange={(loc) => {
+            // Новое место: старый адрес и погода больше не подходят — адрес определяем заново по точке.
+            setCp((c) => ({ ...c, location: loc, meta: { ...c.meta, weather: undefined, address: undefined } }));
+            if (loc && (loc.lat || loc.lon))
+              void reverseGeocode(loc.lat, loc.lon).then((addr) => {
+                if (addr) setCp((c) => (c.location?.lat === loc.lat && c.location?.lon === loc.lon && !c.meta?.address ? { ...c, meta: { ...c.meta, address: addr } } : c));
+              });
+          }}
         />
         <button type="button" className="linkBtn" onClick={() => setShowMap((v) => !v)}>
           {showMap ? "Скрыть карту" : "📍 Уточнить точку на карте"}

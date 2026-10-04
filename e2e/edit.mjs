@@ -144,7 +144,8 @@ async function run(name, browserType, device) {
     ok(name, ev?.date === "2024-05-09" && ev?.title === "Тестовое событие", `event date=${ev?.date} title=${ev?.title}`);
     const loc = ev?.checkpoints[0].location;
     ok(name, loc && loc.lat > 56 && loc.lat < 56.5 && loc.lon > 43.8 && loc.lon < 44.2, `coords ${loc?.lat?.toFixed(4)}, ${loc?.lon?.toFixed(4)} (Нижний Новгород)`);
-    ok(name, Boolean(ev?.checkpoints[0].meta?.address || ev?.checkpoints[0].location?.label), `address="${ev?.checkpoints[0].meta?.address ?? ""}"`);
+    const addr = ev?.checkpoints[0].meta?.address ?? "";
+    ok(name, Boolean(addr) && !/Казан/i.test(addr), `address refreshed for new place: "${addr}"`);
     await shot("3-after-reload");
 
     /* ── 14. Карта ── */
