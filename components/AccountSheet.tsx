@@ -8,6 +8,7 @@ import { authErrorText, getSupabase, isCloudConfigured, pingCloud } from "@/lib/
 import { errorText } from "@/lib/useTrip";
 import { Sheet } from "./Sheet";
 import { DriveSection } from "./DriveSection";
+import { StorageSection } from "./StorageSection";
 
 type Stage = "signin" | "signup" | "link" | "reset" | "newPassword";
 
@@ -182,6 +183,7 @@ export function AccountSheet({
               </div>
             )}
             <DriveSection />
+            <StorageSection />
             <div className="editorActions">
               <button className="softBtn" onClick={signOut} disabled={busy}>
                 Выйти

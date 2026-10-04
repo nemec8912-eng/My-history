@@ -97,6 +97,11 @@ export default function Home() {
   }, [reload]);
 
   const latest = trips && trips.length ? trips[0] : null;
+  const onThisDay = useMemo(() => {
+    const md = today().slice(5);
+    const year = today().slice(0, 4);
+    return (trips ?? []).filter((t) => t.date.slice(5) === md && t.date.slice(0, 4) < year);
+  }, [trips]);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const rest = trips ? trips.slice(1) : [];
@@ -241,6 +246,22 @@ export default function Home() {
         </button>
       )}
 
+      {!q && onThisDay.length > 0 && (
+        <section className="onThisDay">
+          <p className="eyebrow">В этот день</p>
+          {onThisDay.map((t) => {
+            const years = new Date().getFullYear() - Number(t.date.slice(0, 4));
+            return (
+              <Link key={t.id} className="otdCard" href={routes.trip(t.id)}>
+                <span className="otdYears">{years} {plural(years, "год", "года", "лет")} назад</span>
+                <strong>{t.title}</strong>
+                <span className="muted small">{formatDate(t.date)}{t.place ? ` · ${t.place}` : ""}</span>
+              </Link>
+            );
+          })}
+        </section>
+      )}
+
       {!q && <section className="stats">
         <div><strong>{totals.trips}</strong><span>{plural(totals.trips, "поездка", "поездки", "поездок")}</span></div>
         <div><strong>{totals.media}</strong><span>{plural(totals.media, "файл", "файла", "файлов")}</span></div>
@@ -264,9 +285,14 @@ export default function Home() {
           </div>
         )}
 
-        <div className="tripRows">
-          {rest.map((t) => <TripRowLink key={t.id} t={t} />)}
-        </div>
+        {groupByMonth(rest).map((g) => (
+          <div key={g.key} className="monthGroup">
+            <p className="monthLabel">{g.label}</p>
+            <div className="tripRows">
+              {g.trips.map((t) => <TripRowLink key={t.id} t={t} />)}
+            </div>
+          </div>
+        ))}
         {trips && trips.length > 0 && (
           <button className="softBtn" style={{ marginTop: 16 }} disabled={busy} onClick={() => create(demoTrip())}>
             + Пример поездки
@@ -367,4 +393,22 @@ function TripRowLink({ t, q }: { t: Trip; q?: string }) {
       <span className="tripRowChevron">›</span>
     </Link>
   );
+}
+
+const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+
+/** Группирует поездки по месяцам: «Октябрь 2026», «Сентябрь 2026»… */
+function groupByMonth(list: Trip[]) {
+  const groups: { key: string; label: string; trips: Trip[] }[] = [];
+  for (const t of list) {
+    const key = t.date.slice(0, 7);
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== key) {
+      const m = Number(key.slice(5, 7)) - 1;
+      g = { key, label: `${MONTHS[m] ?? ""} ${key.slice(0, 4)}`.trim(), trips: [] };
+      groups.push(g);
+    }
+    g.trips.push(t);
+  }
+  return groups;
 }
