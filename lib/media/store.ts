@@ -133,17 +133,27 @@ function mediaDuration(file: Blob, kind: MediaKind): Promise<number | undefined>
   });
 }
 
+type StoredBuffer = { __buf: ArrayBuffer; type: string };
+
 /**
- * Сохраняет файл в IndexedDB. Safari иногда не может сохранить объект File из выбора файлов
- * («Error preparing Blob/File data…») — тогда сохраняем копию его содержимого как обычный Blob.
+ * Сохраняет файл в IndexedDB. Safari в приватном режиме (и иногда с объектами File из выбора файлов)
+ * не умеет хранить Blob («Error preparing Blob/File data…») — тогда храним содержимое как ArrayBuffer.
  */
 async function putBlob(key: string, blob: Blob) {
   try {
     await idb.set(STORES.blobs, key, blob);
   } catch {
-    const copy = new Blob([await blob.arrayBuffer()], { type: blob.type });
-    await idb.set(STORES.blobs, key, copy);
+    const stored: StoredBuffer = { __buf: await blob.arrayBuffer(), type: blob.type };
+    await idb.set(STORES.blobs, key, stored);
   }
+}
+
+async function getBlob(key: string): Promise<Blob | undefined> {
+  const v = await idb.get<Blob | StoredBuffer>(STORES.blobs, key).catch(() => undefined);
+  if (!v) return undefined;
+  if (v instanceof Blob) return v;
+  if ("__buf" in v) return new Blob([v.__buf], { type: v.type });
+  return undefined;
 }
 
 /* ───────────── Облако (Supabase Storage как первый провайдер) ───────────── */
@@ -193,7 +203,7 @@ async function syncDrive(userId: string) {
   const left: MediaId[] = [];
   for (const id of pending) {
     try {
-      const raw = await idb.get<Blob>(STORES.blobs, `${id}:raw`);
+      const raw = await getBlob(`${id}:raw`);
       const meta = await idb.get<MediaItem>(STORES.meta, id);
       if (!raw || !meta) continue;
       const ext = (meta.name?.split(".").pop() || meta.mime.split("/")[1] || "bin").slice(0, 5);
@@ -256,7 +266,7 @@ async function uploadOne(id: MediaId, userId: string): Promise<boolean> {
   // Если оригинал уходит на Google Диск, в Supabase кладём только превью.
   const variants: Variant[] = meta.drive ? ["thumb"] : ["original", "thumb"];
   for (const variant of variants) {
-    const blob = await idb.get<Blob>(STORES.blobs, `${id}:${variant}`);
+    const blob = await getBlob(`${id}:${variant}`);
     if (!blob) continue;
     const path = `${userId}/${id}/${variant}`;
     const { error } = await sb.storage.from(MEDIA_BUCKET).upload(path, blob, {
@@ -326,13 +336,13 @@ async function downloadFromCloud(id: MediaId, variant: Variant): Promise<Blob | 
   if (row.provider === "gdrive") {
     const loc = row.location as { fileId: string };
     const blob = await downloadFromDrive(loc.fileId);
-    if (blob && blob.size < 8 * 1024 * 1024) await idb.set(STORES.blobs, `${id}:original`, blob).catch(() => undefined);
+    if (blob && blob.size < 8 * 1024 * 1024) await putBlob(`${id}:original`, blob).catch(() => undefined);
     return blob;
   }
   if (row.provider === "supabase") {
     const loc = row.location as { bucket: string; path: string };
     const { data } = await sb.storage.from(loc.bucket).download(loc.path);
-    if (data) await idb.set(STORES.blobs, `${id}:${row.variant}`, data).catch(() => undefined);
+    if (data) await putBlob(`${id}:${row.variant}`, data).catch(() => undefined);
     return data ?? null;
   }
   return null;
@@ -446,10 +456,10 @@ export function getMediaUrl(id: MediaId, variant: Variant = "thumb"): Promise<st
 
   const p = (async () => {
     let blob =
-      (await idb.get<Blob>(STORES.blobs, key).catch(() => undefined)) ??
-      (variant === "original" ? await idb.get<Blob>(STORES.blobs, `${id}:raw`).catch(() => undefined) : undefined) ??
+      (await getBlob(key)) ??
+      (variant === "original" ? await getBlob(`${id}:raw`) : undefined) ??
       (variant === "thumb" && (await idb.get<MediaItem>(STORES.meta, id).catch(() => undefined))?.kind !== "video"
-        ? await idb.get<Blob>(STORES.blobs, `${id}:original`).catch(() => undefined)
+        ? await getBlob(`${id}:original`)
         : undefined) ??
       null;
     if (!blob) blob = await downloadFromCloud(id, variant).catch(() => null);
