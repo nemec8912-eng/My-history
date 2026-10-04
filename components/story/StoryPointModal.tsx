@@ -22,7 +22,9 @@ export function StoryPointModal({
   onMove,
   onOpenPlace,
   onNavigate,
+  defaultDate,
 }: {
+  defaultDate?: string;
   cp: Checkpoint;
   index: number;
   total: number;
@@ -47,12 +49,13 @@ export function StoryPointModal({
       {edit ? (
         <CheckpointEditor
           value={cp}
+          defaultDate={defaultDate}
           onCancel={() => (startInEdit ? onClose() : setEdit(false))}
           onSave={(next) => {
             onSave(next);
             setEdit(false);
           }}
-          onDelete={regular ? () => onDelete(cp.id) : undefined}
+          onDelete={regular ? () => confirm("Удалить эту точку? Фото и видео останутся на Google Диске.") && onDelete(cp.id) : undefined}
           onMove={regular ? (dir) => onMove(cp.id, dir) : undefined}
           canMoveUp={regular && index > 1}
           canMoveDown={regular && index < total - 2}

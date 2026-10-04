@@ -72,6 +72,8 @@ export type CheckpointMeta = {
   /** Дата момента YYYY-MM-DD (для многодневных поездок). */
   date?: string;
   weather?: Weather;
+  /** Точный адрес (улица, дом) — отдельно от названия места. */
+  address?: string;
   /** Тип момента при создании: фото, видео, аудио или заметка. */
   type?: "photo" | "video" | "audio" | "note";
 };

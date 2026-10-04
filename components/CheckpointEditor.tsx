@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { PALETTE, SHAPES, SHAPE_IDS, SIZES, SIZE_IDS, safeColor } from "@/lib/markerStyle";
 import type { Checkpoint, MediaItem } from "@/lib/types";
@@ -7,6 +8,8 @@ import { MediaGallery, MediaPicker } from "./media/Media";
 import { PointMarker } from "./PointMarker";
 import { PlacePicker } from "./PlacePicker";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
+
+const MapPointPicker = dynamic(() => import("./map/MapPointPicker").then((m) => m.MapPointPicker), { ssr: false });
 
 const ICONS = ["", "🏠", "🚉", "🚆", "🚇", "🚌", "🚕", "🚗", "🚶", "🔁", "☕", "🍽", "📷", "🌳", "🎡", "🐘", "🏛", "⭐", "❤️", "🎉"];
 const IMPORTANCE = ["Обычная", "Заметная", "Важная", "Главная"];
@@ -30,7 +33,10 @@ export function CheckpointEditor({
   onMove,
   canMoveUp,
   canMoveDown,
+  defaultDate,
 }: {
+  /** Дата поездки — показывается, если у момента нет своей даты. */
+  defaultDate?: string;
   value: Checkpoint;
   onSave: (cp: Checkpoint) => void;
   onCancel: () => void;
@@ -42,6 +48,10 @@ export function CheckpointEditor({
   const [cp, setCp] = useState<Checkpoint>(value);
   const set = (patch: Partial<Checkpoint>) => setCp((c) => ({ ...c, ...patch }));
   const setStyle = (patch: Partial<Checkpoint["style"]>) => setCp((c) => ({ ...c, style: { ...c.style, ...patch } }));
+  // Погода привязана к месту и времени: при их изменении она будет получена заново.
+  const setMeta = (patch: Partial<NonNullable<Checkpoint["meta"]>>, resetWeather = false) =>
+    setCp((c) => ({ ...c, meta: { ...c.meta, ...patch, ...(resetWeather ? { weather: undefined } : {}) } }));
+  const [showMap, setShowMap] = useState(false);
 
   return (
     <form
@@ -84,18 +94,23 @@ export function CheckpointEditor({
 
       <div className="row">
         <label>
-          Время
-          <input type="time" value={cp.time ?? ""} onChange={(e) => set({ time: e.target.value || undefined })} />
+          Дата
+          <input
+            type="date"
+            value={cp.meta?.date ?? defaultDate ?? ""}
+            onChange={(e) => setMeta({ date: e.target.value || undefined }, true)}
+          />
         </label>
         <label>
-          Значок
-          <select value={cp.icon ?? ""} onChange={(e) => set({ icon: e.target.value || undefined })}>
-            {ICONS.map((i) => (
-              <option key={i} value={i}>
-                {i || "Номер точки"}
-              </option>
-            ))}
-          </select>
+          Время
+          <input
+            type="time"
+            value={cp.time ?? ""}
+            onChange={(e) => {
+              set({ time: e.target.value || undefined });
+              setMeta({}, true);
+            }}
+          />
         </label>
       </div>
 
@@ -106,16 +121,44 @@ export function CheckpointEditor({
 
       <div className="fieldBlock">
         <span className="fieldLabel">Место</span>
-        <PlacePicker value={cp.location} onChange={(loc) => set({ location: loc })} />
+        <PlacePicker
+          value={cp.location}
+          onChange={(loc) => setCp((c) => ({ ...c, location: loc, meta: { ...c.meta, weather: undefined } }))}
+        />
+        <button type="button" className="linkBtn" onClick={() => setShowMap((v) => !v)}>
+          {showMap ? "Скрыть карту" : "📍 Уточнить точку на карте"}
+        </button>
+        {showMap && (
+          <MapPointPicker
+            value={cp.location}
+            onChange={(loc) => setCp((c) => ({ ...c, location: { lat: loc.lat, lon: loc.lon, label: c.location?.label || loc.label }, meta: { ...c.meta, weather: undefined } }))}
+            onAddress={(addr) =>
+              setCp((c) => ({
+                ...c,
+                meta: { ...c.meta, address: addr },
+                location: c.location ? { ...c.location, label: c.location.label || addr } : c.location,
+              }))
+            }
+          />
+        )}
       </div>
 
-      <div className="row">
-        <label>
-          Дата
-          <input type="date" value={cp.meta?.date ?? ""} onChange={(e) => set({ meta: { ...cp.meta, date: e.target.value || undefined, weather: undefined } })} />
-        </label>
-        <span />
-      </div>
+      <label>
+        Адрес
+        <input value={cp.meta?.address ?? ""} onChange={(e) => setMeta({ address: e.target.value || undefined })} placeholder="Улица, дом (необязательно)" />
+      </label>
+
+      <label>
+        Значок
+        <select value={cp.icon ?? ""} onChange={(e) => set({ icon: e.target.value || undefined })}>
+          {ICONS.map((i) => (
+            <option key={i} value={i}>
+              {i || "Номер точки"}
+            </option>
+          ))}
+        </select>
+      </label>
+
 
 
       <fieldset>
@@ -212,7 +255,7 @@ export function CheckpointEditor({
 
       <div className="editorActions">
         {onDelete && (
-          <button type="button" className="dangerBtn" onClick={() => confirm("Удалить точку?") && onDelete()}>
+          <button type="button" className="dangerBtn" onClick={() => onDelete()}>
             Удалить
           </button>
         )}

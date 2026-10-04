@@ -688,3 +688,9 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .leaflet-tile.tilesDark { filter: invert(1) hue-rotate(195deg) brightness(.82) contrast(.92) saturate(.55); }
 .leaflet-tile.tilesSat { filter: brightness(.78) saturate(.9); }
 .roundBtn.accent .ic { color: #fff; }
+
+/* Редактирование: точка на карте */
+.mapPicker { margin-top: 8px; display: grid; gap: 6px; }
+.mapPickerCanvas { height: 240px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #10141d; }
+.lmPin.pick { background: transparent; border: 0; box-shadow: none; font-size: 30px; }
+.pillBtn .ic { vertical-align: -3px; margin-right: 2px; }

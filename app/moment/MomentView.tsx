@@ -10,7 +10,7 @@ import { MediaGallery, MediaImg, MediaPicker } from "@/components/media/Media";
 import { useMediaMetas, useMediaUrl } from "@/components/media/useMedia";
 import { Sheet } from "@/components/Sheet";
 import { routes } from "@/lib/routes";
-import { hasCoords, momentDate } from "@/lib/stats";
+import { hasCoords, isEvent, momentDate } from "@/lib/stats";
 import { useTrip } from "@/lib/useTrip";
 import { fetchWeather } from "@/lib/weather";
 import type { Checkpoint } from "@/lib/types";
@@ -36,21 +36,24 @@ export function MomentView() {
   const tripId = params.get("trip") ?? undefined;
   const cpId = params.get("cp") ?? undefined;
   const router = useRouter();
-  const { trip, status, update } = useTrip(tripId);
+  const { trip, status, update, remove } = useTrip(tripId);
   const [edit, setEdit] = useState(false);
   const [i, setI] = useState(0);
   const touchX = useRef<number | null>(null);
   const cp = trip?.checkpoints.find((c) => c.id === cpId);
   const metas = useMediaMetas(cp?.mediaIds ?? []);
   const visual = metas.filter((m) => m.kind !== "audio");
-  const weatherTried = useRef(false);
+  const weatherTried = useRef("");
 
   useEffect(() => setI(0), [cpId]);
 
-  // Погода: если её ещё нет, но есть место и дата — получаем один раз и сохраняем в момент.
+  // Погода: если её ещё нет, но есть место и дата — получаем и сохраняем в момент.
+  // Ключ включает место, дату и время: после редактирования погода получается заново.
   useEffect(() => {
-    if (!trip || !cp || cp.meta?.weather || weatherTried.current || !hasCoords(cp)) return;
-    weatherTried.current = true;
+    if (!trip || !cp || cp.meta?.weather || !hasCoords(cp)) return;
+    const key = `${cp.id}|${cp.location!.lat}|${cp.location!.lon}|${momentDate(trip, cp)}|${cp.time ?? ""}`;
+    if (weatherTried.current === key) return;
+    weatherTried.current = key;
     fetchWeather(cp.location!.lat, cp.location!.lon, momentDate(trip, cp), cp.time).then((w) => {
       if (w) update({ ...trip, checkpoints: trip.checkpoints.map((c) => (c.id === cp.id ? { ...c, meta: { ...c.meta, weather: w } } : c)) });
     });
@@ -68,7 +71,41 @@ export function MomentView() {
   const idx = trip.checkpoints.findIndex((c) => c.id === cp.id);
   const prev = trip.checkpoints[idx - 1];
   const next = trip.checkpoints[idx + 1];
-  const save = (n: Checkpoint) => update({ ...trip, checkpoints: trip.checkpoints.map((c) => (c.id === n.id ? n : c)) });
+  /**
+   * Сохраняет ТОТ ЖЕ момент (тот же id) внутри той же поездки/события.
+   * Для отдельного события его дата, название и место следуют за моментами,
+   * чтобы событие переезжало в нужное место хронологии, «Этого дня» и поиска.
+   */
+  const save = (n: Checkpoint) => {
+    const checkpoints = trip.checkpoints.map((c) => (c.id === n.id ? n : c));
+    let next = { ...trip, checkpoints };
+    if (isEvent(trip)) {
+      const dates = checkpoints.map((c) => c.meta?.date ?? trip.date).sort();
+      next = { ...next, date: dates[0] ?? trip.date, meta: { ...trip.meta, kind: "event" } };
+      if (checkpoints.length === 1) {
+        const only = checkpoints[0];
+        const region = only.location?.label?.split(",").slice(1).join(",").trim();
+        next = { ...next, title: only.title || trip.title, place: region || trip.place };
+      }
+    }
+    void update(next);
+  };
+  const deleteMoment = async () => {
+    const last = isEvent(trip) && trip.checkpoints.length === 1;
+    const ok = confirm(
+      last
+        ? "Удалить это событие? Фото и видео останутся на Google Диске, но из приложения событие пропадёт."
+        : "Удалить этот момент? Фото и видео останутся на Google Диске."
+    );
+    if (!ok) return;
+    if (last) {
+      await remove();
+      router.replace(routes.home);
+    } else {
+      await update({ ...trip, checkpoints: trip.checkpoints.filter((c) => c.id !== cp.id) });
+      router.replace(routes.trip(trip.id));
+    }
+  };
   const date = momentDate(trip, cp);
   const w = cp.meta?.weather;
   const current = visual[Math.min(i, Math.max(0, visual.length - 1))];
@@ -96,7 +133,7 @@ export function MomentView() {
           </Link>
           <span className="heroBarRight">
             <button className="pillBtn" onClick={() => setEdit(true)}>
-              Изменить
+              <Icon name="edit" size={16} /> Редактировать
             </button>
           </span>
         </div>
@@ -134,6 +171,12 @@ export function MomentView() {
               </span>
             )}
           </div>
+          {cp.meta?.address && (
+            <div className="mDate">
+              <Icon name="route" size={20} />
+              <span>{cp.meta.address}</span>
+            </div>
+          )}
           <div className="mDate">
             <Icon name="calendar" size={20} />
             <span>{fullDate(date, cp.time)}</span>
@@ -177,17 +220,13 @@ export function MomentView() {
         <Sheet onClose={() => setEdit(false)}>
           <CheckpointEditor
             value={cp}
+            defaultDate={trip.date}
             onCancel={() => setEdit(false)}
             onSave={(n) => {
               save(n);
               setEdit(false);
             }}
-            onDelete={
-              cp.kind === "regular"
-                ? () => {
-                    update({ ...trip, checkpoints: trip.checkpoints.filter((c) => c.id !== cp.id) });
-                    router.replace(routes.trip(trip.id));
-                  }
+            onDelete={cp.kind === "regular" ? deleteMoment : undefined}
                 : undefined
             }
           />

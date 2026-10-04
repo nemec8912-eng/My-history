@@ -50,7 +50,7 @@ function AudioRow({ meta, onRemove }: { meta: MediaItem; onRemove?: (id: string)
         {url ? <audio src={url} controls preload="metadata" /> : <span className="muted small">Загрузка…</span>}
       </div>
       {onRemove && (
-        <button type="button" className="iconBtn" aria-label="Удалить" onClick={() => onRemove(meta.id)}>
+        <button type="button" className="iconBtn" aria-label="Удалить" onClick={() => confirm("Убрать эту голосовую заметку из момента? Сам файл не удаляется.") && onRemove(meta.id)}>
           ×
         </button>
       )}
@@ -114,7 +114,7 @@ function Lightbox({
             <button
               type="button"
               onClick={() => {
-                if (!confirm("Убрать этот файл?")) return;
+                if (!confirm("Убрать этот файл из момента? Сам файл на Google Диске не удаляется.")) return;
                 onRemove(item.id);
                 if (items.length <= 1) onClose();
                 else setI((v) => Math.min(v, items.length - 2));

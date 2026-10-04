@@ -264,6 +264,7 @@ export function TripView() {
       {openCp && (
         <StoryPointModal
           key="point-modal"
+          defaultDate={trip.date}
           cp={openCp}
           index={openIndex}
           total={cps.length}
