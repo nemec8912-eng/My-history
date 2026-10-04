@@ -47,7 +47,7 @@ export function AddressInput({
   }, [value]);
 
   return (
-    <div className="placePicker addressInput">
+    <div className="addressInput">
       <input
         value={value}
         placeholder="Улица, дом (необязательно)"

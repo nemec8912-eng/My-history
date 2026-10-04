@@ -97,13 +97,14 @@ async function run(name, browserType, device) {
     await addr.type("Тверская 7", { delay: 40 });
     await page.locator(".sheet .addressInput .suggestList button").first().waitFor({ timeout: 15000 });
     const sugg = await page.locator(".sheet .addressInput .suggestList button").allTextContents();
+    await page.locator(".sheet .addressInput").scrollIntoViewIfNeeded();
+    await shot("0-address");
     await page.locator(".sheet .addressInput .suggestList button").first().click();
     await page.locator('.sheet button[type="submit"]').click();
     await page.waitForTimeout(1500);
     all = await trips();
     const c2 = all.find((t) => t.id === tripId).checkpoints.find((c) => c.id === cafe.id);
     ok(name, /Тверская/.test(c2.meta?.address ?? "") && c2.location?.lat > 55.7 && c2.location?.lat < 55.8, `address suggestions: ${sugg.length} (${sugg[0]}); saved "${c2.meta?.address}" at ${c2.location?.lat?.toFixed(4)}, ${c2.location?.lon?.toFixed(4)}`);
-    await shot("0-address");
 
     /* ── GPX ── */
     step = "gpx";

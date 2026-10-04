@@ -799,3 +799,13 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .recapProgress i { display: block; height: 100%; background: #fff; border-radius: 2px; }
 .recapActions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 420px); margin: 0 auto; }
 .recapPage .hint { text-align: center; }
+.addressInput { position: relative; margin-top: 8px; }
+.addressInput > input { width: 100%; }
+
+/* Подсказки мест и адресов */
+.suggestList { list-style: none; margin: 6px 0 0; padding: 4px; border-radius: 14px; background: #161c28; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 14px 30px rgba(0,0,0,.45); max-height: 280px; overflow-y: auto; position: relative; z-index: 20; }
+.suggestList li + li { border-top: 1px solid rgba(255,255,255,.06); }
+.suggestList button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; border: 0; background: none; color: inherit; border-radius: 10px; cursor: pointer; font: inherit; }
+.suggestList button:hover, .suggestList button:active { background: rgba(47,123,255,.15); }
+.suggestList strong { font-size: 15px; font-weight: 700; }
+.suggestList span { font-size: 13px; color: var(--muted); }
