@@ -3,6 +3,7 @@ import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { RegisterSW } from "@/components/RegisterSW";
 import { DriveBanner } from "@/components/DriveSection";
+import { OfflineBar } from "@/components/OfflineBar";
 
 export const metadata: Metadata = {
   title: "Моя история",
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <RegisterSW />
         <DriveBanner />
+        <OfflineBar />
       </body>
     </html>
   );

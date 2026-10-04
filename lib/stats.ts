@@ -59,3 +59,23 @@ export const momentDate = (t: Trip, c: Checkpoint) => c.meta?.date ?? t.date;
 export const isEvent = (t: Trip) =>
   t.meta?.kind === "event" || (t.meta?.kind !== "trip" && !t.checkpoints.some((c) => c.kind === "start" || c.kind === "end"));
 export const kindLabel = (t: Trip) => (isEvent(t) ? "Событие" : "Поездка");
+
+/** Километры по способам передвижения: участок до точки считается тем способом, каким до неё добрались. */
+export function kmByMode(trips: Trip[]): { mode: string; km: number }[] {
+  const acc = new Map<string, number>();
+  for (const t of trips) {
+    if (isEvent(t)) continue;
+    const pts = t.checkpoints.filter(hasCoords);
+    for (let i = 1; i < pts.length; i++) {
+      const km = haversineKm(pts[i - 1].location!, pts[i].location!);
+      const mode = pts[i].arrivedBy ?? "other";
+      acc.set(mode, (acc.get(mode) ?? 0) + km);
+    }
+  }
+  return Array.from(acc.entries())
+    .map(([mode, km]) => ({ mode, km }))
+    .filter((x) => x.km >= 0.05)
+    .sort((a, b) => b.km - a.km);
+}
+
+export const fmtKm = (km: number) => (km >= 10 ? Math.round(km).toLocaleString("ru-RU") : km.toFixed(1).replace(".", ","));

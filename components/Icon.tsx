@@ -30,6 +30,7 @@ const P: Record<string, string> = {
   timeline: "M6 3v18M6 7h12M6 12h8M6 17h10",
   cloud: "M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.5A3.5 3.5 0 0 0 7 18z",
   logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10",
+  trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6m4-6v6",
 };
 
 export function Icon({ name, size = 22, stroke = 1.9, className, fill }: { name: keyof typeof P | string; size?: number; stroke?: number; className?: string; fill?: boolean }) {

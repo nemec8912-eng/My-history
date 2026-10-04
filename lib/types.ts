@@ -83,6 +83,8 @@ export type TripMeta = {
   endDate?: string;
   /** «trip» — поездка с маршрутом (по умолчанию), «event» — событие без поездки: просто вышел, и что-то случилось. */
   kind?: "trip" | "event";
+  /** Когда перенесено в корзину (ISO). Через 30 дней удаляется окончательно. */
+  deletedAt?: string;
 };
 
 export type Checkpoint = {
@@ -178,4 +180,8 @@ export type MediaItem = {
   drive?: boolean;
   /** Длительность видео/аудио, сек. */
   duration?: number;
+  /** Когда снято (из EXIF), ISO без часового пояса: YYYY-MM-DDTHH:MM:SS. */
+  takenAt?: string;
+  /** Где снято (из EXIF GPS). */
+  gps?: GeoPoint;
 };

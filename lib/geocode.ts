@@ -58,3 +58,72 @@ export function currentPosition(): Promise<{ lat: number; lon: number }> {
     );
   });
 }
+
+/* ───────────── Обратное геокодирование с кэшем и очередью (не чаще 1 запроса в секунду) ───────────── */
+
+export type ReverseInfo = { label: string; short: string; state?: string; country?: string };
+
+let chain: Promise<unknown> = Promise.resolve();
+let last = 0;
+function throttled<T>(fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(async () => {
+    const wait = Math.max(0, last + 1100 - Date.now());
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    last = Date.now();
+    return fn();
+  });
+  chain = run.catch(() => undefined);
+  return run;
+}
+
+const memo = new Map<string, Promise<ReverseInfo | null>>();
+
+/**
+ * Место по координатам: название, регион (субъект РФ) и страна. Результат кэшируется на устройстве,
+ * поэтому повторные открытия не обращаются к серверу. zoom 5 — только регион, 16 — точное место.
+ */
+export function reverseInfo(lat: number, lon: number, zoom: 5 | 16 = 16): Promise<ReverseInfo | null> {
+  const digits = zoom === 5 ? 1 : 4;
+  const key = `geo:${zoom}:${lat.toFixed(digits)},${lon.toFixed(digits)}`;
+  const hit = memo.get(key);
+  if (hit) return hit;
+  const p = (async () => {
+    const { idb, STORES } = await import("./media/idb");
+    const cached = await idb.get<ReverseInfo>(STORES.kv, key).catch(() => undefined);
+    if (cached) return cached;
+    const res = await throttled(() =>
+      fetch(`${BASE}/reverse?${new URLSearchParams({ lat: String(lat), lon: String(lon), format: "jsonv2", addressdetails: "1", "accept-language": "ru", zoom: String(zoom) })}`)
+    ).catch(() => null);
+    if (!res || !res.ok) return null;
+    const j = (await res.json().catch(() => null)) as { name?: string; display_name?: string; address?: Record<string, string> } | null;
+    if (!j?.display_name) return null;
+    const b = build(zoom === 5 ? undefined : j.name, j.address, j.display_name);
+    const info: ReverseInfo = { label: b.label, short: b.short, state: j.address?.state || j.address?.region || j.address?.city, country: j.address?.country_code };
+    await idb.set(STORES.kv, key, info).catch(() => undefined);
+    return info;
+  })();
+  memo.set(key, p);
+  p.then((v) => {
+    if (!v) memo.delete(key);
+  });
+  return p;
+}
+
+/** Граница региона (упрощённая) для закраски на карте. Кэшируется на устройстве. */
+export async function regionShape(name: string): Promise<object | null> {
+  const key = `geo:shape:${name}`;
+  const { idb, STORES } = await import("./media/idb");
+  const cached = await idb.get<object | "none">(STORES.kv, key).catch(() => undefined);
+  if (cached) return cached === "none" ? null : cached;
+  const res = await throttled(() =>
+    fetch(`${BASE}/search?${new URLSearchParams({ q: name, countrycodes: "ru", format: "jsonv2", polygon_geojson: "1", polygon_threshold: "0.02", limit: "5", "accept-language": "ru" })}`)
+  ).catch(() => null);
+  if (!res || !res.ok) return null;
+  const list = (await res.json().catch(() => [])) as { addresstype?: string; type?: string; geojson?: { type: string } }[];
+  const hit =
+    list.find((r) => (r.addresstype === "state" || r.addresstype === "region") && /Polygon/.test(r.geojson?.type ?? "")) ??
+    list.find((r) => (r.addresstype === "city" || r.type === "administrative") && /Polygon/.test(r.geojson?.type ?? ""));
+  const shape = hit?.geojson ?? null;
+  await idb.set(STORES.kv, key, shape ?? "none").catch(() => undefined);
+  return shape;
+}

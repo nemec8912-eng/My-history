@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AccountPanel } from "@/components/AccountSheet";
 import { TabScreen } from "@/components/BottomNav";
 import { useDriveState } from "@/components/DriveSection";
 import { Icon } from "@/components/Icon";
+import { routes } from "@/lib/routes";
 import { getUserId, isCloudConfigured } from "@/lib/supabase";
 
 /** Раздел «Я»: аккаунт, Google Диск, место, синхронизация (экран 10 макета). */
@@ -50,6 +52,19 @@ export default function MePage() {
             <span>{r.label}</span>
             <span className="srValue">{r.value}</span>
           </div>
+        ))}
+      </div>
+      <div className="settingsList meLinks">
+        {[
+          { href: routes.stats, icon: "map", label: "Статистика и регионы" },
+          { href: routes.importPhotos, icon: "grid", label: "Импорт из галереи" },
+          { href: routes.trash, icon: "trash", label: "Корзина" },
+        ].map((l) => (
+          <Link key={l.href} href={l.href} className="settingsRow">
+            <Icon name={l.icon} size={20} />
+            <span>{l.label}</span>
+            <Icon name="chevron" size={16} className="srValue" />
+          </Link>
         ))}
       </div>
       <div className="meCard">

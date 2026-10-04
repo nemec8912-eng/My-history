@@ -7,6 +7,8 @@ import { safeColor } from "@/lib/markerStyle";
 
 export type MapPoint = { id: string; lat: number; lon: number; color: string; photoId?: string; label?: string; icon?: string; big?: boolean };
 export type MapLine = { id: string; color: string; coords: [number, number][] };
+/** Закрашенная область (например, посещённый регион) в формате GeoJSON. */
+export type MapArea = { id: string; color: string; geojson: object };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type L = any;
@@ -48,6 +50,7 @@ function addBase(L: L, map: L, base: "map" | "satellite"): L[] {
 export function LeafletMap({
   points,
   lines = [],
+  areas = [],
   onSelect,
   labels = true,
   interactive = true,
@@ -59,6 +62,7 @@ export function LeafletMap({
   onSelect?: (id: string) => void;
   labels?: boolean;
   interactive?: boolean;
+  areas?: MapArea[];
   className?: string;
   base?: "map" | "satellite";
 }) {
@@ -67,7 +71,7 @@ export function LeafletMap({
   const baseRef = useRef(base);
   const onSel = useRef(onSelect);
   onSel.current = onSelect;
-  const key = JSON.stringify([points.map((p) => [p.id, p.lat, p.lon, p.photoId, p.color, p.label]), lines.map((l) => [l.id, l.coords.length, l.color])]);
+  const key = JSON.stringify([points.map((p) => [p.id, p.lat, p.lon, p.photoId, p.color, p.label]), lines.map((l) => [l.id, l.coords.length, l.color]), areas.map((a) => a.id)]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +107,13 @@ export function LeafletMap({
     if (!a) return;
     const { L, map, layer } = a;
     layer.clearLayers();
+    for (const ar of areas) {
+      try {
+        L.geoJSON(ar.geojson, { style: { color: ar.color, weight: 1.5, opacity: 0.9, fillColor: ar.color, fillOpacity: 0.28 }, interactive: false }).addTo(layer);
+      } catch {
+        /* повреждённая геометрия — просто не рисуем */
+      }
+    }
     for (const ln of lines) {
       if (ln.coords.length < 2) continue;
       L.polyline(ln.coords, { color: ln.color, weight: 9, opacity: 0.18, lineCap: "round" }).addTo(layer);

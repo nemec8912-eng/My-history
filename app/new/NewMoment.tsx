@@ -13,6 +13,7 @@ import { routes } from "@/lib/routes";
 import { isEvent } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import { fetchWeather } from "@/lib/weather";
+import { reverseInfo } from "@/lib/geocode";
 import type { CheckpointMeta, Location, MediaItem, Weather } from "@/lib/types";
 
 type MType = NonNullable<CheckpointMeta["type"]>;
@@ -70,6 +71,16 @@ export function NewMoment() {
     try {
       const items = await addMediaFiles(files);
       setMedia((m) => [...m, ...items]);
+      // Первое фото с датой и GPS из EXIF само подставляет время и место (если они ещё не заданы).
+      const shot = items.find((i) => i.takenAt || i.gps);
+      if (shot && !media.length) {
+        if (shot.takenAt) setWhen(shot.takenAt.slice(0, 16));
+        if (shot.gps && !loc) {
+          const g = shot.gps;
+          setLoc({ lat: g.lat, lon: g.lon });
+          reverseInfo(g.lat, g.lon, 16).then((info) => info && setLoc((l) => (l && l.lat === g.lat && l.lon === g.lon ? { ...l, label: info.label } : l)));
+        }
+      }
     } catch (er) {
       setErr("Не удалось сохранить файл: " + (er instanceof Error ? er.message : String(er)));
     } finally {
@@ -152,6 +163,11 @@ export function NewMoment() {
           </button>
         ))}
       </div>
+
+      <Link className="impLink" href={routes.importPhotos}>
+        <Icon name="grid" size={18} /> Импорт из галереи: много фото сразу, по дням и местам
+        <Icon name="chevron" size={16} />
+      </Link>
 
       {(type === "photo" || type === "video") && (
         <div className="nmMedia">

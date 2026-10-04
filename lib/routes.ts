@@ -17,6 +17,9 @@ export const routes = {
   videos: "/videos/",
   search: "/search/",
   me: "/me/",
+  importPhotos: "/import/",
+  trash: "/trash/",
+  stats: "/stats/",
 };
 
 /** Абсолютный путь к файлу из public/ с учётом basePath. */

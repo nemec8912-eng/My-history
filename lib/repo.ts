@@ -15,10 +15,58 @@ const LEGACY_KEY = "my-history-events";
 
 export interface TripRepo {
   readonly mode: "local" | "cloud";
+  /** Все поездки и события, кроме лежащих в корзине. */
   list(): Promise<Trip[]>;
   get(id: string): Promise<Trip | null>;
   save(trip: Trip): Promise<void>;
+  /** Переносит в корзину (можно восстановить 30 дней). */
   remove(id: string): Promise<void>;
+  /** Корзина. Записи старше 30 дней при открытии удаляются окончательно. */
+  listTrash(): Promise<Trip[]>;
+  restore(id: string): Promise<void>;
+  /** Удаляет навсегда (сами файлы фото/видео на Google Диске не трогаются). */
+  purge(id: string): Promise<void>;
+}
+
+export const TRASH_DAYS = 30;
+const isTrashed = (t: Trip) => Boolean(t.meta?.deletedAt);
+const expired = (t: Trip) => Date.now() - new Date(t.meta!.deletedAt!).getTime() > TRASH_DAYS * 86_400_000;
+const trashed = (t: Trip): Trip => ({ ...t, meta: { ...t.meta, deletedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() });
+const restored = (t: Trip): Trip => {
+  const meta = { ...t.meta };
+  delete meta.deletedAt;
+  return { ...t, meta, updatedAt: new Date().toISOString() };
+};
+
+/* ───────────── Очередь изменений без сети ───────────── */
+
+const PENDING_SAVES = "pending-trip-saves";
+const PENDING_DELETES = "pending-trip-deletes";
+const tripSyncListeners = new Set<() => void>();
+export function onTripSyncChange(fn: () => void): () => void {
+  tripSyncListeners.add(fn);
+  return () => tripSyncListeners.delete(fn);
+}
+const emitTripSync = () => tripSyncListeners.forEach((fn) => fn());
+
+async function getIds(key: string): Promise<string[]> {
+  return (await idb.get<string[]>(STORES.kv, key).catch(() => undefined)) ?? [];
+}
+async function setIds(key: string, ids: string[]) {
+  await idb.set(STORES.kv, key, Array.from(new Set(ids))).catch(() => undefined);
+  emitTripSync();
+}
+
+/** Сколько изменений поездок ждут отправки в облако. */
+export async function pendingTripCount(): Promise<number> {
+  return (await getIds(PENDING_SAVES)).length + (await getIds(PENDING_DELETES)).length;
+}
+
+/** Ошибка связи (а не отказ сервера): такое изменение просто ждёт сети. */
+export function isNetworkError(e: unknown): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const msg = String((e as { message?: string })?.message ?? e);
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timeout|offline/i.test(msg);
 }
 
 function sortTrips(trips: Trip[]) {
@@ -94,7 +142,7 @@ const localRepo: TripRepo = {
   mode: "local",
   async list() {
     await migrateLegacy();
-    return sortTrips(await readLocal());
+    return sortTrips((await readLocal()).filter((t) => !isTrashed(t)));
   },
   async get(id) {
     return (await readLocal()).find((t) => t.id === id) ?? null;
@@ -107,6 +155,20 @@ const localRepo: TripRepo = {
     await writeLocal(trips);
   },
   async remove(id) {
+    const t = await localRepo.get(id);
+    if (t) await localRepo.save(trashed(t));
+  },
+  async listTrash() {
+    const all = await readLocal();
+    const old = all.filter((t) => isTrashed(t) && expired(t));
+    if (old.length) await writeLocal(all.filter((t) => !old.includes(t)));
+    return sortTrips(all.filter((t) => isTrashed(t) && !expired(t)));
+  },
+  async restore(id) {
+    const t = await localRepo.get(id);
+    if (t) await localRepo.save(restored(t));
+  },
+  async purge(id) {
     await writeLocal((await readLocal()).filter((t) => t.id !== id));
   },
 };
@@ -252,30 +314,140 @@ function fromRows(t: TripRow, cps: CheckpointRow[]): Trip {
   });
 }
 
+async function cloudWrite(ownerId: string, trip: Trip) {
+  const sb = getSupabase()!;
+  const tripRow = toTripRow(trip, ownerId);
+  let { error } = await sb.from("trips").upsert(cloudHasMeta ? tripRow : stripMeta(tripRow));
+  if (error && cloudHasMeta && isMissingMeta(error)) {
+    cloudHasMeta = false;
+    ({ error } = await sb.from("trips").upsert(stripMeta(tripRow)));
+  }
+  if (error) throw error;
+  const rows = trip.checkpoints.map((c, idx) => toCheckpointRow(c, trip.id, ownerId, idx));
+  if (rows.length) {
+    let { error: e2 } = await sb.from("checkpoints").upsert(cloudHasMeta ? rows : rows.map(stripMeta));
+    if (e2 && cloudHasMeta && isMissingMeta(e2)) {
+      cloudHasMeta = false;
+      ({ error: e2 } = await sb.from("checkpoints").upsert(rows.map(stripMeta)));
+    }
+    if (e2) throw e2;
+  }
+  const keep = rows.map((r) => r.id);
+  let del = sb.from("checkpoints").delete().eq("trip_id", trip.id);
+  if (keep.length) del = del.not("id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
+  const { error: e3 } = await del;
+  if (e3) throw e3;
+}
+
+async function cloudDelete(id: string) {
+  const { error } = await getSupabase()!.from("trips").delete().eq("id", id);
+  if (error) throw error;
+}
+
+let flushing: Promise<number> | null = null;
+
+/** Отправляет в облако всё, что было изменено без сети. Возвращает, сколько осталось. */
+export function flushPendingTrips(): Promise<number> {
+  if (flushing) return flushing;
+  flushing = (async () => {
+    const ownerId = await getUserId();
+    if (!ownerId || !getSupabase()) return 0;
+    const cache = await readLocal(CACHE_KEY);
+    const saves = await getIds(PENDING_SAVES);
+    const leftSaves: string[] = [];
+    for (let i = 0; i < saves.length; i++) {
+      const id = saves[i];
+      const t = cache.find((x) => x.id === id);
+      if (!t) continue;
+      try {
+        await cloudWrite(ownerId, t);
+      } catch (e) {
+        if (isNetworkError(e)) {
+          leftSaves.push(...saves.slice(i)); // сети нет — остальное попробуем позже
+          break;
+        }
+        leftSaves.push(id);
+        console.warn("Не удалось отправить поездку", id, e);
+      }
+    }
+    const nowSaves = await getIds(PENDING_SAVES);
+    await setIds(PENDING_SAVES, [...leftSaves, ...nowSaves.filter((id) => !saves.includes(id))]);
+
+    const dels = await getIds(PENDING_DELETES);
+    const leftDels: string[] = [];
+    for (const id of dels) {
+      try {
+        await cloudDelete(id);
+      } catch {
+        leftDels.push(id);
+      }
+    }
+    const nowDels = await getIds(PENDING_DELETES);
+    await setIds(PENDING_DELETES, [...leftDels, ...nowDels.filter((id) => !dels.includes(id))]);
+    return pendingTripCount();
+  })()
+    .catch(() => pendingTripCount())
+    .finally(() => {
+      flushing = null;
+    });
+  return flushing;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => void flushPendingTrips());
+}
+
 function cloudRepo(ownerId: string): TripRepo {
   const sb = getSupabase()!;
-  return {
+
+  async function putCache(trip: Trip) {
+    const cache = await readLocal(CACHE_KEY);
+    const i = cache.findIndex((t) => t.id === trip.id);
+    if (i >= 0) cache[i] = trip;
+    else cache.push(trip);
+    await writeLocal(cache, CACHE_KEY).catch(() => undefined);
+  }
+
+  async function all(): Promise<Trip[]> {
+    await flushPendingTrips().catch(() => undefined);
+    try {
+      const [{ data: trips, error: e1 }, { data: cps, error: e2 }] = await Promise.all([
+        sb.from("trips").select("*"),
+        sb.from("checkpoints").select("*"),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
+      // Не отправленные ещё изменения важнее того, что пока лежит в облаке.
+      const pendingSaves = new Set(await getIds(PENDING_SAVES));
+      const pendingDels = new Set(await getIds(PENDING_DELETES));
+      const fromCloud = (trips as TripRow[])
+        .filter((t) => !pendingDels.has(t.id))
+        .map((t) =>
+          pendingSaves.has(t.id) && cached.find((c) => c.id === t.id)
+            ? cached.find((c) => c.id === t.id)!
+            : mergeMeta(fromRows(t, (cps ?? []) as CheckpointRow[]), cached.find((c) => c.id === t.id))
+        );
+      const onlyLocal = cached.filter((c) => pendingSaves.has(c.id) && !fromCloud.some((t) => t.id === c.id));
+      const result = sortTrips([...fromCloud, ...onlyLocal]);
+      await writeLocal(result, CACHE_KEY).catch(() => undefined);
+      return result;
+    } catch (e) {
+      console.warn("Нет связи с облаком, показываю кэш", e);
+      return sortTrips(await readLocal(CACHE_KEY));
+    }
+  }
+
+  const repo: TripRepo = {
     mode: "cloud",
     async list() {
-      try {
-        const [{ data: trips, error: e1 }, { data: cps, error: e2 }] = await Promise.all([
-          sb.from("trips").select("*"),
-          sb.from("checkpoints").select("*"),
-        ]);
-        if (e1) throw e1;
-        if (e2) throw e2;
-        const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
-        const result = sortTrips(
-          (trips as TripRow[]).map((t) => mergeMeta(fromRows(t, (cps ?? []) as CheckpointRow[]), cached.find((c) => c.id === t.id)))
-        );
-        await writeLocal(result, CACHE_KEY).catch(() => undefined);
-        return result;
-      } catch (e) {
-        console.warn("Нет связи с облаком, показываю кэш", e);
-        return sortTrips(await readLocal(CACHE_KEY));
-      }
+      return (await all()).filter((t) => !isTrashed(t));
     },
     async get(id) {
+      if ((await getIds(PENDING_SAVES)).includes(id)) {
+        const local = (await readLocal(CACHE_KEY)).find((t) => t.id === id);
+        if (local) return local;
+      }
       try {
         const [{ data: t, error: e1 }, { data: cps, error: e2 }] = await Promise.all([
           sb.from("trips").select("*").eq("id", id).maybeSingle(),
@@ -291,40 +463,43 @@ function cloudRepo(ownerId: string): TripRepo {
       }
     },
     async save(trip) {
-      const cache = await readLocal(CACHE_KEY);
-      const i = cache.findIndex((t) => t.id === trip.id);
-      if (i >= 0) cache[i] = trip;
-      else cache.push(trip);
-      await writeLocal(cache, CACHE_KEY).catch(() => undefined);
-
-      const tripRow = toTripRow(trip, ownerId);
-      let { error } = await sb.from("trips").upsert(cloudHasMeta ? tripRow : stripMeta(tripRow));
-      if (error && cloudHasMeta && isMissingMeta(error)) {
-        cloudHasMeta = false;
-        ({ error } = await sb.from("trips").upsert(stripMeta(tripRow)));
+      // Сначала на устройство — изменение не потеряется, даже если сети нет.
+      await putCache(trip);
+      await setIds(PENDING_SAVES, [...(await getIds(PENDING_SAVES)), trip.id]);
+      try {
+        await cloudWrite(ownerId, trip);
+        const left = (await getIds(PENDING_SAVES)).filter((id) => id !== trip.id);
+        await setIds(PENDING_SAVES, left);
+      } catch (e) {
+        if (isNetworkError(e)) return; // отправится само, когда появится сеть
+        throw e;
       }
-      if (error) throw error;
-      const rows = trip.checkpoints.map((c, idx) => toCheckpointRow(c, trip.id, ownerId, idx));
-      if (rows.length) {
-        let { error: e2 } = await sb.from("checkpoints").upsert(cloudHasMeta ? rows : rows.map(stripMeta));
-        if (e2 && cloudHasMeta && isMissingMeta(e2)) {
-          cloudHasMeta = false;
-          ({ error: e2 } = await sb.from("checkpoints").upsert(rows.map(stripMeta)));
-        }
-        if (e2) throw e2;
-      }
-      const keep = rows.map((r) => r.id);
-      let del = sb.from("checkpoints").delete().eq("trip_id", trip.id);
-      if (keep.length) del = del.not("id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
-      const { error: e3 } = await del;
-      if (e3) throw e3;
     },
     async remove(id) {
+      const t = await repo.get(id);
+      if (t) await repo.save(trashed(t));
+    },
+    async listTrash() {
+      const list = (await all()).filter(isTrashed);
+      for (const t of list.filter(expired)) await repo.purge(t.id).catch(() => undefined);
+      return list.filter((t) => !expired(t));
+    },
+    async restore(id) {
+      const t = (await all()).find((x) => x.id === id);
+      if (t) await repo.save(restored(t));
+    },
+    async purge(id) {
       await writeLocal((await readLocal(CACHE_KEY)).filter((t) => t.id !== id), CACHE_KEY).catch(() => undefined);
-      const { error } = await sb.from("trips").delete().eq("id", id);
-      if (error) throw error;
+      await setIds(PENDING_SAVES, (await getIds(PENDING_SAVES)).filter((x) => x !== id));
+      try {
+        await cloudDelete(id);
+      } catch (e) {
+        if (!isNetworkError(e)) throw e;
+        await setIds(PENDING_DELETES, [...(await getIds(PENDING_DELETES)), id]);
+      }
     },
   };
+  return repo;
 }
 
 export async function getRepo(): Promise<TripRepo> {

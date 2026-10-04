@@ -14,12 +14,13 @@ import { useMediaMetas } from "@/components/media/useMedia";
 import { withAddedMedia } from "@/components/CheckpointEditor";
 import { Icon } from "@/components/Icon";
 import dynamic from "next/dynamic";
-import { hasCoords, isEvent, tripCover, tripDateRange, tripDays, tripKm, tripMediaIds, tripPlaces } from "@/lib/stats";
+import { fmtKm, hasCoords, isEvent, kmByMode, tripCover, tripDateRange, tripDays, tripKm, tripMediaIds, tripPlaces } from "@/lib/stats";
+import { TRAVEL } from "@/lib/travel";
 import { formatDate, formatDuration, minutesOf, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
 import { routes } from "@/lib/routes";
-import type { Checkpoint, Trip } from "@/lib/types";
+import type { Checkpoint, TravelMode, Trip } from "@/lib/types";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 
@@ -36,7 +37,9 @@ function TripStatTiles({ trip }: { trip: Trip }) {
     { icon: "photo", value: metas.filter((m) => m.kind === "image").length, label: "фото", color: "#b46bff" },
     { icon: "video", value: metas.filter((m) => m.kind === "video").length, label: "видео", color: "#ff4d5e" },
   ].filter(Boolean) as { icon: string; value: number; label: string; color: string }[];
+  const modes = isEvent(trip) ? [] : kmByMode([trip]).filter((m) => m.mode !== "other");
   return (
+    <>
     <div className="statTiles">
       {tiles.map((t) => (
         <div key={t.label + t.icon} className="statTile" style={{ ["--tc" as string]: t.color }}>
@@ -46,6 +49,12 @@ function TripStatTiles({ trip }: { trip: Trip }) {
         </div>
       ))}
     </div>
+    {modes.length > 0 && (
+      <p className="modeLine">
+        {modes.map((m) => `${TRAVEL[m.mode as TravelMode]?.icon ?? ""} ${fmtKm(m.km)} км`).join("   ")}
+      </p>
+    )}
+    </>
   );
 }
 

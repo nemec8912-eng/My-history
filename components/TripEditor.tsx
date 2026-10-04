@@ -69,7 +69,7 @@ export function TripEditor({
       </fieldset>
       <div className="editorActions">
         {onDelete && (
-          <button type="button" className="dangerBtn" onClick={() => confirm("Удалить поездку целиком?") && onDelete()}>
+          <button type="button" className="dangerBtn" onClick={() => confirm("Перенести поездку в корзину? Её можно восстановить в течение 30 дней (раздел «Я» → «Корзина»).") && onDelete()}>
             Удалить
           </button>
         )}

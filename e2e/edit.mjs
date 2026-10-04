@@ -205,7 +205,7 @@ async function run(name, browserType, device) {
     await page.locator(".sheet .dangerBtn").click();
     await page.waitForURL((u) => !u.search.includes(cpId), { timeout: 10000 });
     const after3 = await trips();
-    ok(name, !after3.some((t) => t.id === tripId) && after3.length === all.length - 1, "deleting the only moment removes the event (after confirmation)");
+    ok(name, Boolean(after3.find((t) => t.id === tripId)?.meta?.deletedAt) && after3.filter((t) => !t.meta?.deletedAt).length === all.length - 1, "deleting the only moment moves the event to trash (after confirmation)");
     log.push(`[${name}] OK overflowX=${await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)}`);
   } catch (e) {
     log.push(`[${name}] FAILED: ${e.message.split("\n")[0]}`);

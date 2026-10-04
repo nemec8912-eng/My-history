@@ -10,6 +10,7 @@ import { newId } from "../markerStyle";
 import { getSupabase, getUserId, MEDIA_BUCKET } from "../supabase";
 import type { MediaId, MediaItem, MediaKind } from "../types";
 import { idb, STORES } from "./idb";
+import { readPhotoInfo } from "../exif";
 import { downloadFromDrive, getDriveToken, isDriveEnabled, onDriveChange, uploadToDrive } from "./gdrive";
 
 export type Variant = "original" | "thumb";
@@ -151,6 +152,11 @@ async function getPendingDrive(): Promise<MediaId[]> {
 }
 async function setPendingDrive(ids: MediaId[]) {
   await idb.set(STORES.kv, PENDING_DRIVE, Array.from(new Set(ids))).catch(() => undefined);
+}
+
+/** Сколько файлов ждут загрузки в облако (Supabase). */
+export async function pendingUploadCount(): Promise<number> {
+  return (await getPending()).length;
 }
 
 /** Сколько оригиналов ждут загрузки на Google Диск. */
@@ -363,6 +369,9 @@ export async function addMedia(file: File): Promise<MediaItem> {
     }
   }
 
+  // Дата и место съёмки из EXIF — до сжатия, иначе они теряются.
+  const shot = kind === "image" ? await readPhotoInfo(file).catch(() => null) : null;
+
   const drive = isDriveEnabled();
   if (drive) {
     // Оригинал без сжатия — на Google Диск; на телефоне остаётся облегчённая копия фото.
@@ -384,6 +393,8 @@ export async function addMedia(file: File): Promise<MediaItem> {
     createdAt: new Date().toISOString(),
     ...(duration ? { duration } : {}),
     ...(drive ? { drive: true } : {}),
+    ...(shot?.fromExif && shot.takenAt ? { takenAt: shot.takenAt } : {}),
+    ...(shot?.gps ? { gps: shot.gps } : {}),
   };
   await idb.set(STORES.meta, id, meta);
   await queueUpload([id]);
