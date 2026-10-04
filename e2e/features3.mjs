@@ -295,7 +295,8 @@ async function run(name, browserType, device) {
     await page.waitForTimeout(2000);
     const sum = await page.locator(".achSummary").textContent();
     const got = Number(sum.match(/(\d+) из/)?.[1] ?? 0);
-    ok(name, got >= 4, `achievements: "${sum}"`);
+    const doneTitles = await page.locator(".achItem.done strong").allTextContents();
+    ok(name, got >= 3 && ["Первый момент", "В путь!", "Мечта сбылась"].every((t) => doneTitles.includes(t)), `achievements: "${sum}" — ${doneTitles.join(", ")}`);
     await shot("5-achievements", true);
 
     /* ── Интересное рядом ── */

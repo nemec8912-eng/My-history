@@ -115,7 +115,7 @@ async function run(name, browserType, device) {
       { name: "IMG_3.jpg", buffer: withExif(await jpeg("#27ae60", "Свияжск"), "2025:07:15 16:40:00", 55.7716, 48.6593) },
       { name: "IMG_4.jpg", buffer: withExif(await jpeg("#2980b9", "Нижний"), "2025:07:16 12:10:00", 56.3287, 44.0020) },
     ].map((f) => ({ ...f, mimeType: "image/jpeg" }));
-    await page.locator('.importPage input[type="file"]').setInputFiles(files);
+    await page.locator('.importPage .impDrop input[type="file"]').setInputFiles(files);
     await page.waitForSelector(".impCluster", { timeout: 15000 });
     await page.waitForTimeout(6000); // названия мест (1 запрос в секунду)
     const days = await page.locator(".impDay").count();
