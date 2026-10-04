@@ -139,3 +139,36 @@ export async function regionShape(name: string): Promise<object | null> {
   await idb.set(STORES.kv, key, shape ?? "none").catch(() => undefined);
   return shape;
 }
+
+/* ───────────── Подсказки адреса (улица, дом) ───────────── */
+
+export type AddressHit = { address: string; detail: string; lat: number; lon: number };
+
+function addressLine(a: Record<string, string>, fallback: string): { address: string; detail: string } {
+  const street = a.road || a.pedestrian || a.footway || a.square || a.residential || a.neighbourhood || "";
+  const house = a.house_number ? `, ${a.house_number}` : "";
+  const city = a.city || a.town || a.village || a.hamlet || a.municipality || "";
+  const name = !street ? fallback.split(",")[0] : "";
+  const address = street ? `${street}${house}` : name;
+  const detail = Array.from(new Set([city, a.state || a.region].filter(Boolean))).filter((x) => x !== address).join(", ");
+  return { address, detail };
+}
+
+/**
+ * Поиск адреса по первым буквам. Если у момента уже есть точка — сначала адреса рядом с ней
+ * (в радиусе ~30 км), чтобы «Ленина, 5» находилась в нужном городе.
+ */
+export async function searchAddress(q: string, near?: { lat: number; lon: number }, signal?: AbortSignal): Promise<AddressHit[]> {
+  const params = new URLSearchParams({ q, format: "jsonv2", addressdetails: "1", limit: "7", "accept-language": "ru", countrycodes: "ru", dedupe: "1" });
+  if (near && (near.lat || near.lon)) {
+    const d = 0.3;
+    params.set("viewbox", `${near.lon - d},${near.lat + d},${near.lon + d},${near.lat - d}`);
+  }
+  const res = await fetch(`${BASE}/search?${params}`, { signal });
+  if (!res.ok) throw new Error("Поиск адреса недоступен");
+  const list = (await res.json()) as { display_name: string; lat: string; lon: string; address?: Record<string, string> }[];
+  const seen = new Set<string>();
+  return list
+    .map((p) => ({ ...addressLine(p.address ?? {}, p.display_name), lat: Number(p.lat), lon: Number(p.lon) }))
+    .filter((h) => h.address && !seen.has(h.address + h.detail) && (seen.add(h.address + h.detail), true));
+}

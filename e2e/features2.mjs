@@ -87,6 +87,24 @@ async function run(name, browserType, device) {
     ok(name, afterF === expect && before > afterF, `map tag filter: markers ${before} → ${afterF} (tagged moment has ${expect ? "a place" : "no place"})`);
     await shot("1-map-tag");
 
+    /* ── Подсказки адреса ── */
+    step = "address";
+    await page.goto(BASE + `/moment/?trip=${tripId}&cp=${cafe.id}`, { waitUntil: "load" });
+    await page.waitForTimeout(1000);
+    await page.getByRole("button", { name: /Редактировать/ }).click();
+    const addr = page.locator(".sheet .addressInput input");
+    await addr.fill("");
+    await addr.type("Тверская 7", { delay: 40 });
+    await page.locator(".sheet .addressInput .suggestList button").first().waitFor({ timeout: 15000 });
+    const sugg = await page.locator(".sheet .addressInput .suggestList button").allTextContents();
+    await page.locator(".sheet .addressInput .suggestList button").first().click();
+    await page.locator('.sheet button[type="submit"]').click();
+    await page.waitForTimeout(1500);
+    all = await trips();
+    const c2 = all.find((t) => t.id === tripId).checkpoints.find((c) => c.id === cafe.id);
+    ok(name, /Тверская/.test(c2.meta?.address ?? "") && c2.location?.lat > 55.7 && c2.location?.lat < 55.8, `address suggestions: ${sugg.length} (${sugg[0]}); saved "${c2.meta?.address}" at ${c2.location?.lat?.toFixed(4)}, ${c2.location?.lon?.toFixed(4)}`);
+    await shot("0-address");
+
     /* ── GPX ── */
     step = "gpx";
     await page.goto(BASE + `/trip/?id=${tripId}`, { waitUntil: "load" });

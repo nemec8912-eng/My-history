@@ -9,6 +9,7 @@ import { PointMarker } from "./PointMarker";
 import { PlacePicker } from "./PlacePicker";
 import { reverseGeocode } from "@/lib/geocode";
 import { TagInput, useAllTags } from "./Tags";
+import { AddressInput } from "./AddressInput";
 import { appendSpoken, VoiceButton } from "./VoiceInput";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
@@ -155,10 +156,22 @@ export function CheckpointEditor({
         )}
       </div>
 
-      <label>
-        Адрес
-        <input value={cp.meta?.address ?? ""} onChange={(e) => setMeta({ address: e.target.value || undefined })} placeholder="Улица, дом (необязательно)" />
-      </label>
+      <div className="fieldBlock">
+        <span className="fieldLabel">Адрес</span>
+        <AddressInput
+          value={cp.meta?.address ?? ""}
+          near={cp.location && (cp.location.lat || cp.location.lon) ? cp.location : undefined}
+          onChange={(v) => setMeta({ address: v || undefined })}
+          onPick={(h) =>
+            // Адрес точнее места из поиска: переносим точку на карте на выбранный дом.
+            setCp((c) => ({
+              ...c,
+              location: { lat: h.lat, lon: h.lon, label: c.location?.label || [h.address, h.detail].filter(Boolean).join(", ") },
+              meta: { ...c.meta, address: [h.address, h.detail].filter(Boolean).join(", "), weather: undefined },
+            }))
+          }
+        />
+      </div>
 
       <div className="fieldBlock">
         <span className="fieldLabel">Метки</span>

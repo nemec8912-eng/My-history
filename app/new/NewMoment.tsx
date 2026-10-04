@@ -15,6 +15,7 @@ import { useTrips } from "@/lib/useTrips";
 import { fetchWeather } from "@/lib/weather";
 import { currentPosition, reverseInfo } from "@/lib/geocode";
 import { TagInput, useAllTags } from "@/components/Tags";
+import { AddressInput } from "@/components/AddressInput";
 import { appendSpoken, VoiceButton } from "@/components/VoiceInput";
 import type { CheckpointMeta, Location, MediaItem, Weather } from "@/lib/types";
 
@@ -50,6 +51,7 @@ export function NewMoment() {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [address, setAddress] = useState("");
   const tagHints = useAllTags();
   const [target, setTarget] = useState<string>(preset ?? "event");
   const [weather, setWeather] = useState<Weather | null>(null);
@@ -136,7 +138,7 @@ export function NewMoment() {
         location: loc,
         mediaIds: media.map((m) => m.id),
         coverMediaId: firstImage?.id,
-        meta: { date, type, ...(w ? { weather: w } : {}), ...(tags.length ? { tags } : {}) },
+        meta: { date, type, ...(w ? { weather: w } : {}), ...(tags.length ? { tags } : {}), ...(address.trim() ? { address: address.trim() } : {}) },
       });
       const repo = await getRepo();
       let tripId: string;
@@ -242,6 +244,16 @@ export function NewMoment() {
             <Icon name="pin" size={20} /> Место
           </span>
           <PlacePicker value={loc} onChange={setLoc} />
+          <AddressInput
+            value={address}
+            near={loc && (loc.lat || loc.lon) ? loc : undefined}
+            onChange={setAddress}
+            onPick={(h) => {
+              const full = [h.address, h.detail].filter(Boolean).join(", ");
+              setAddress(full);
+              setLoc((l) => ({ lat: h.lat, lon: h.lon, label: l?.label || full }));
+            }}
+          />
         </div>
         <label className="nmRow">
           <span className="nmLabel">
