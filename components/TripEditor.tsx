@@ -27,8 +27,16 @@ export function TripEditor({
         onSave({ ...t, title: t.title.trim() || "Без названия" });
       }}
     >
-      <p className="eyebrow">Поездка</p>
-      <h3>Изменить поездку</h3>
+      <p className="eyebrow">{t.meta?.kind === "event" ? "Событие" : "Поездка"}</p>
+      <h3>Изменить</h3>
+      <div className="segmented2">
+        <button type="button" className={t.meta?.kind !== "event" ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "trip" } })}>
+          Поездка
+        </button>
+        <button type="button" className={t.meta?.kind === "event" ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "event" } })}>
+          Событие
+        </button>
+      </div>
       <label>
         Название
         <input required value={t.title} onChange={(e) => set({ title: e.target.value })} />
@@ -39,8 +47,8 @@ export function TripEditor({
           <input type="date" value={t.date} onChange={(e) => set({ date: e.target.value })} />
         </label>
         <label>
-          Время
-          <input type="time" value={t.time ?? ""} onChange={(e) => set({ time: e.target.value || undefined })} />
+          По (необязательно)
+          <input type="date" value={t.meta?.endDate ?? ""} min={t.date} onChange={(e) => set({ meta: { ...t.meta, endDate: e.target.value || undefined } })} />
         </label>
       </div>
       <label>

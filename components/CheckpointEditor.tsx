@@ -5,6 +5,7 @@ import { PALETTE, SHAPES, SHAPE_IDS, SIZES, SIZE_IDS, safeColor } from "@/lib/ma
 import type { Checkpoint, MediaItem } from "@/lib/types";
 import { MediaGallery, MediaPicker } from "./media/Media";
 import { PointMarker } from "./PointMarker";
+import { PlacePicker } from "./PlacePicker";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
 const ICONS = ["", "🏠", "🚉", "🚆", "🚇", "🚌", "🚕", "🚗", "🚶", "🔁", "☕", "🍽", "📷", "🌳", "🎡", "🐘", "🏛", "⭐", "❤️", "🎉"];
@@ -103,20 +104,19 @@ export function CheckpointEditor({
         <textarea rows={3} value={cp.description ?? ""} onChange={(e) => set({ description: e.target.value || undefined })} placeholder="Что здесь было?" />
       </label>
 
-      <label>
-        Место
-        <input
-          placeholder="Адрес или название места"
-          value={cp.location?.label ?? ""}
-          onChange={(e) =>
-            set({
-              location: e.target.value
-                ? { lat: cp.location?.lat ?? 0, lon: cp.location?.lon ?? 0, label: e.target.value }
-                : undefined,
-            })
-          }
-        />
-      </label>
+      <div className="fieldBlock">
+        <span className="fieldLabel">Место</span>
+        <PlacePicker value={cp.location} onChange={(loc) => set({ location: loc })} />
+      </div>
+
+      <div className="row">
+        <label>
+          Дата
+          <input type="date" value={cp.meta?.date ?? ""} onChange={(e) => set({ meta: { ...cp.meta, date: e.target.value || undefined, weather: undefined } })} />
+        </label>
+        <span />
+      </div>
+
 
       <fieldset>
         <legend>Форма</legend>
