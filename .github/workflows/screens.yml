@@ -26,6 +26,7 @@ jobs:
         run: |
           npx serve out -l 3000 > /dev/null 2>&1 &
           sleep 3
+          node e2e/cloud.mjs || true
           node e2e/screens.mjs
       - name: Publish to ci-screens branch
         run: |
