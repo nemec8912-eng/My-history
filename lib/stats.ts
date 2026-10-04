@@ -67,6 +67,13 @@ export function kmByMode(trips: Trip[]): { mode: string; km: number }[] {
   const acc = new Map<string, number>();
   for (const t of trips) {
     if (isEvent(t)) continue;
+    if (t.route?.provider === "gpx" && t.route.distance > 0) {
+      // Есть точный трек — его длина целиком идёт на самый частый способ передвижения в поездке.
+      const modes = t.checkpoints.map((c) => c.arrivedBy).filter(Boolean) as string[];
+      const top = modes.sort((a, b) => modes.filter((x) => x === b).length - modes.filter((x) => x === a).length)[0] ?? "other";
+      acc.set(top, (acc.get(top) ?? 0) + t.route.distance / 1000);
+      continue;
+    }
     const pts = t.checkpoints.filter(hasCoords);
     for (let i = 1; i < pts.length; i++) {
       const km = haversineKm(pts[i - 1].location!, pts[i].location!);

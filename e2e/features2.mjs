@@ -81,7 +81,8 @@ async function run(name, browserType, device) {
     await page.locator(".mapTags .tagChip", { hasText: "#москва" }).click();
     await page.waitForTimeout(1500);
     const afterF = await page.locator(".lmIcon").count();
-    ok(name, afterF === 1 && before > 1, `map tag filter: markers ${before} → ${afterF}`);
+    const expect = cafe.location && (cafe.location.lat || cafe.location.lon) ? 1 : 0;
+    ok(name, afterF === expect && before > afterF, `map tag filter: markers ${before} → ${afterF} (tagged moment has ${expect ? "a place" : "no place"})`);
     await shot("1-map-tag");
 
     /* ── GPX ── */
