@@ -61,7 +61,16 @@ export function currentPosition(): Promise<{ lat: number; lon: number }> {
 
 /* ───────────── Обратное геокодирование с кэшем и очередью (не чаще 1 запроса в секунду) ───────────── */
 
-export type ReverseInfo = { label: string; short: string; state?: string; country?: string };
+export type ReverseInfo = {
+  /** Улица/объект с городом и регионом — подходит как адрес. */
+  label: string;
+  short: string;
+  /** Название для момента: достопримечательность, а если её нет — город или посёлок. */
+  place?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+};
 
 let chain: Promise<unknown> = Promise.resolve();
 let last = 0;
@@ -84,7 +93,7 @@ const memo = new Map<string, Promise<ReverseInfo | null>>();
  */
 export function reverseInfo(lat: number, lon: number, zoom: 5 | 16 = 16): Promise<ReverseInfo | null> {
   const digits = zoom === 5 ? 1 : 4;
-  const key = `geo:${zoom}:${lat.toFixed(digits)},${lon.toFixed(digits)}`;
+  const key = `geo2:${zoom}:${lat.toFixed(digits)},${lon.toFixed(digits)}`;
   const hit = memo.get(key);
   if (hit) return hit;
   const p = (async () => {
@@ -95,10 +104,13 @@ export function reverseInfo(lat: number, lon: number, zoom: 5 | 16 = 16): Promis
       fetch(`${BASE}/reverse?${new URLSearchParams({ lat: String(lat), lon: String(lon), format: "jsonv2", addressdetails: "1", "accept-language": "ru", zoom: String(zoom) })}`)
     ).catch(() => null);
     if (!res || !res.ok) return null;
-    const j = (await res.json().catch(() => null)) as { name?: string; display_name?: string; address?: Record<string, string> } | null;
+    const j = (await res.json().catch(() => null)) as { name?: string; category?: string; display_name?: string; address?: Record<string, string> } | null;
     if (!j?.display_name) return null;
     const b = build(zoom === 5 ? undefined : j.name, j.address, j.display_name);
-    const info: ReverseInfo = { label: b.label, short: b.short, state: j.address?.state || j.address?.region || j.address?.city, country: j.address?.country_code };
+    const a = j.address ?? {};
+    const poi = j.name && /tourism|historic|amenity|leisure|railway|natural|aeroway|shop/.test(j.category ?? "") ? j.name : undefined;
+    const city = a.city || a.town || a.village || a.hamlet || a.municipality;
+    const info: ReverseInfo = { label: b.label, short: b.short, place: poi || city || b.short, city, state: a.state || a.region || a.city, country: a.country_code };
     await idb.set(STORES.kv, key, info).catch(() => undefined);
     return info;
   })();

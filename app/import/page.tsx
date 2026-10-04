@@ -85,7 +85,13 @@ export default function ImportPage() {
     setFiles((f) => f.filter((x) => !keys.has(x.key)));
   }
 
-  const clusterTitle = (c: ImportCluster) => places[c.key]?.short || (c.center ? "Место по GPS" : "Фото");
+  const clusterTitle = (c: ImportCluster) => places[c.key]?.place || (c.center ? "Место по GPS" : "Фото");
+  /** Подпись места: «Казанский кремль, Казань, Татарстан» — без улицы (она уходит в адрес). */
+  const placeLabel = (c: ImportCluster) => {
+    const i = places[c.key];
+    if (!i) return undefined;
+    return Array.from(new Set([i.place, i.city, i.state].filter(Boolean))).join(", ");
+  };
 
   async function run() {
     setErr(null);
@@ -107,10 +113,10 @@ export default function ImportPage() {
         return createCheckpoint("regular", {
           title: clusterTitle(c),
           time: c.from,
-          location: c.center ? { ...c.center, label: info?.label } : undefined,
+          location: c.center ? { ...c.center, label: placeLabel(c) } : undefined,
           mediaIds,
           coverMediaId: firstImage ? ids.get(firstImage.key) : mediaIds[0],
-          meta: { date: c.date, type: c.files.every((f) => f.kind === "video") ? "video" : "photo" },
+          meta: { date: c.date, type: c.files.every((f) => f.kind === "video") ? "video" : "photo", ...(info?.label ? { address: info.label } : {}) },
         });
       };
 

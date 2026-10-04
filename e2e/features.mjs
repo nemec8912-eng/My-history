@@ -97,7 +97,7 @@ async function run(name, browserType, device) {
     );
 
   try {
-    await page.goto(BASE + "/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/", { waitUntil: "load" });
     await page.getByRole("button", { name: "Открыть пример" }).first().click();
     await page.waitForURL(/\/trip\/\?id=/, { timeout: 15000 });
     await page.waitForTimeout(1500);
@@ -105,7 +105,8 @@ async function run(name, browserType, device) {
     const before = (await trips()).length;
 
     /* ── Импорт из галереи ── */
-    await page.goto(BASE + "/new/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/new/", { waitUntil: "load" });
+    await page.waitForTimeout(1000);
     await page.locator(".impLink").click();
     await page.waitForURL(/\/import\//);
     const files = [
@@ -139,7 +140,7 @@ async function run(name, browserType, device) {
     await shot("2-imported");
 
     /* ── Статистика и регионы ── */
-    await page.goto(BASE + "/stats/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/stats/", { waitUntil: "load" });
     await page.waitForTimeout(12000);
     const regions = await page.locator(".regionList li strong").allTextContents();
     ok(name, regions.some((r) => /Татарстан/.test(r)) && regions.some((r) => /Нижегород/.test(r)), `regions: ${regions.join(" | ")}`);
@@ -151,18 +152,18 @@ async function run(name, browserType, device) {
 
     /* ── Корзина ── */
     const nn = imported.find((t) => t.checkpoints.some((c) => c.location.lat > 56));
-    await page.goto(BASE + `/moment/?trip=${nn.id}&cp=${nn.checkpoints[0].id}`, { waitUntil: "networkidle" });
+    await page.goto(BASE + `/moment/?trip=${nn.id}&cp=${nn.checkpoints[0].id}`, { waitUntil: "load" });
     await page.waitForTimeout(1000);
     await page.getByRole("button", { name: /Редактировать/ }).click();
     await page.locator(".sheet .dangerBtn").click();
     await page.waitForTimeout(1500);
     let t3 = await trips();
     ok(name, t3.find((t) => t.id === nn.id)?.meta?.deletedAt, "deleted event moved to trash (kept with deletedAt)");
-    await page.goto(BASE + "/timeline/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/timeline/", { waitUntil: "load" });
     await page.waitForTimeout(1000);
     const tlHidden = !(await page.locator("main").textContent()).includes(nn.title) || imported.some((t) => t.id !== nn.id && t.title === nn.title);
     ok(name, tlHidden, "trashed event hidden from timeline");
-    await page.goto(BASE + "/me/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/me/", { waitUntil: "load" });
     await page.locator(".meLinks a", { hasText: "Корзина" }).click();
     await page.waitForURL(/\/trash\//);
     await page.waitForSelector(".trashItem", { timeout: 10000 });
@@ -173,12 +174,12 @@ async function run(name, browserType, device) {
     t3 = await trips();
     ok(name, (await page.locator(".trashItem").count()) === 0 && !t3.find((t) => t.id === nn.id)?.meta?.deletedAt, "restored from trash");
     // удалить снова и навсегда
-    await page.goto(BASE + `/moment/?trip=${nn.id}&cp=${nn.checkpoints[0].id}`, { waitUntil: "networkidle" });
+    await page.goto(BASE + `/moment/?trip=${nn.id}&cp=${nn.checkpoints[0].id}`, { waitUntil: "load" });
     await page.waitForTimeout(800);
     await page.getByRole("button", { name: /Редактировать/ }).click();
     await page.locator(".sheet .dangerBtn").click();
     await page.waitForTimeout(1200);
-    await page.goto(BASE + "/trash/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/trash/", { waitUntil: "load" });
     await page.waitForSelector(".trashItem", { timeout: 10000 });
     await page.getByRole("button", { name: "Удалить навсегда" }).click();
     await page.waitForTimeout(1200);
@@ -186,7 +187,7 @@ async function run(name, browserType, device) {
     ok(name, !t3.some((t) => t.id === nn.id) && (await page.locator(".trashItem").count()) === 0, "purged permanently after confirmation");
 
     /* ── Без сети ── */
-    await page.goto(BASE + "/new/", { waitUntil: "networkidle" });
+    await page.goto(BASE + "/new/", { waitUntil: "load" });
     await page.evaluate(() => navigator.serviceWorker?.ready).catch(() => undefined);
     await page.waitForTimeout(1500);
     await ctx.setOffline(true);

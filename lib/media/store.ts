@@ -133,6 +133,19 @@ function mediaDuration(file: Blob, kind: MediaKind): Promise<number | undefined>
   });
 }
 
+/**
+ * Сохраняет файл в IndexedDB. Safari иногда не может сохранить объект File из выбора файлов
+ * («Error preparing Blob/File data…») — тогда сохраняем копию его содержимого как обычный Blob.
+ */
+async function putBlob(key: string, blob: Blob) {
+  try {
+    await idb.set(STORES.blobs, key, blob);
+  } catch {
+    const copy = new Blob([await blob.arrayBuffer()], { type: blob.type });
+    await idb.set(STORES.blobs, key, copy);
+  }
+}
+
 /* ───────────── Облако (Supabase Storage как первый провайдер) ───────────── */
 
 async function getPending(): Promise<MediaId[]> {
@@ -375,12 +388,12 @@ export async function addMedia(file: File): Promise<MediaItem> {
   const drive = isDriveEnabled();
   if (drive) {
     // Оригинал без сжатия — на Google Диск; на телефоне остаётся облегчённая копия фото.
-    await idb.set(STORES.blobs, `${id}:raw`, file);
-    if (kind === "image") await idb.set(STORES.blobs, `${id}:original`, original);
+    await putBlob(`${id}:raw`, file);
+    if (kind === "image") await putBlob(`${id}:original`, original);
   } else {
-    await idb.set(STORES.blobs, `${id}:original`, original);
+    await putBlob(`${id}:original`, original);
   }
-  if (thumb) await idb.set(STORES.blobs, `${id}:thumb`, thumb);
+  if (thumb) await putBlob(`${id}:thumb`, thumb);
 
   const meta: MediaItem = {
     id,

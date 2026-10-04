@@ -78,7 +78,11 @@ export function NewMoment() {
         if (shot.gps && !loc) {
           const g = shot.gps;
           setLoc({ lat: g.lat, lon: g.lon });
-          reverseInfo(g.lat, g.lon, 16).then((info) => info && setLoc((l) => (l && l.lat === g.lat && l.lon === g.lon ? { ...l, label: info.label } : l)));
+          reverseInfo(g.lat, g.lon, 16).then(
+            (info) =>
+              info &&
+              setLoc((l) => (l && l.lat === g.lat && l.lon === g.lon ? { ...l, label: Array.from(new Set([info.place, info.city, info.state].filter(Boolean))).join(", ") } : l))
+          );
         }
       }
     } catch (er) {

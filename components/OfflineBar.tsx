@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { onSyncChange, pendingUploadCount, syncPendingUploads } from "@/lib/media/store";
 import { flushPendingTrips, onTripSyncChange, pendingTripCount } from "@/lib/repo";
 import { plural } from "@/lib/format";
+import { getUserId } from "@/lib/supabase";
 
 /**
  * Полоска состояния сети: без интернета всё сохраняется на телефоне,
@@ -17,8 +18,14 @@ export function OfflineBar() {
   useEffect(() => {
     const refresh = () => {
       setOnline(navigator.onLine);
-      pendingTripCount().then(setTrips).catch(() => undefined);
-      pendingUploadCount().then(setFiles).catch(() => undefined);
+      // Без входа в аккаунт всё и так хранится только на устройстве — отправлять некуда.
+      getUserId()
+        .then((uid) => (uid ? Promise.all([pendingTripCount(), pendingUploadCount()]) : [0, 0]))
+        .then(([t, f]) => {
+          setTrips(t);
+          setFiles(f);
+        })
+        .catch(() => undefined);
     };
     const sync = () => {
       if (!navigator.onLine) return refresh();
