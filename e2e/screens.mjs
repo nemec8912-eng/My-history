@@ -37,6 +37,7 @@ async function run(name, browserType, device) {
     await page.waitForTimeout(3500);
     await shot("2-trip");
     await shot("3-trip-full", true);
+    await shot("2b-strip");
     await page.locator(".storyCard", { hasText: "Кафе" }).first().click();
     await page.waitForTimeout(1200);
     log.push(`[${name}] modal: ` + JSON.stringify(await page.evaluate(() => {
@@ -45,6 +46,15 @@ async function run(name, browserType, device) {
       return { scrollY: window.scrollY, innerH: window.innerHeight, vvTop: vv && vv.offsetTop, vvH: vv && vv.height, backdrop: r(".modalBackdrop"), sheet: r(".sheet"), bodyOverflow: document.body.style.overflow };
     })));
     await shot("4-point");
+    await page.locator(".sheet").evaluate((el) => el.scrollTo(0, 500));
+    await page.waitForTimeout(300);
+    await shot("4b-point-lower");
+    await page.locator(".sheet").evaluate((el) => el.scrollTo(0, 0));
+    await page.getByRole("button", { name: "Дальше ›" }).click();
+    await page.waitForTimeout(600);
+    log.push(`[${name}] next point -> ${await page.locator(".premiumHero h3").textContent().catch(() => "?")}`);
+    await page.getByRole("button", { name: "‹ Раньше" }).click();
+    await page.waitForTimeout(400);
     await page.getByRole("button", { name: "Изменить", exact: true }).click();
     await page.waitForTimeout(500);
     await shot("5-editor");
@@ -68,6 +78,7 @@ async function run(name, browserType, device) {
     await page.waitForTimeout(3500);
     await shot("9-home-with-trip");
     await shot("9b-home-full", true);
+    await page.goto(BASE + "/trip/?id=" + new URL(page.url()).searchParams.get("id"), { waitUntil: "networkidle" }).catch(() => {});
     log.push(`[${name}] OK url=${page.url()} overflowX=${await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)}`);
   } catch (e) {
     log.push(`[${name}] FAILED: ${e.message}`);

@@ -99,14 +99,27 @@ export default function Home() {
   const latest = trips && trips.length ? trips[0] : null;
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const rest = (trips ? trips.slice(1) : []).filter(
-    (t) =>
-      !q ||
-      [t.title, t.place, t.description, ...t.checkpoints.map((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`)]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-  );
+  const rest = trips ? trips.slice(1) : [];
+  // Поиск с первых букв: сначала названия, начинающиеся с запроса, затем совпадения с начала слова, затем любые.
+  const found = useMemo(() => {
+    if (!q || !trips) return [];
+    const scored = trips
+      .map((t) => {
+        const title = t.title.toLowerCase();
+        const text = [t.title, t.place, t.description, ...t.checkpoints.map((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`)]
+          .join(" ")
+          .toLowerCase();
+        let score = -1;
+        if (title.startsWith(q)) score = 0;
+        else if (title.split(/[\s,.()«»-]+/).some((w) => w.startsWith(q))) score = 1;
+        else if (text.split(/[\s,.()«»-]+/).some((w) => w.startsWith(q))) score = 2;
+        else if (text.includes(q)) score = 3;
+        return { t, score };
+      })
+      .filter((x) => x.score >= 0);
+    scored.sort((a, b) => a.score - b.score || b.t.date.localeCompare(a.t.date));
+    return scored.map((x) => x.t);
+  }, [q, trips]);
 
   const totals = useMemo(() => {
     const list = trips ?? [];
@@ -156,7 +169,36 @@ export default function Home() {
         <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount("signin")}>Я</button>
       </header>
 
-      {latest ? (
+      {trips && trips.length > 1 && (
+        <div className="searchWrap">
+          <span className="searchIcon" aria-hidden>⌕</span>
+          <input
+            className="searchInput"
+            type="search"
+            placeholder="Поиск по поездкам, точкам, заметкам…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            enterKeyHint="search"
+          />
+          {query && (
+            <button className="searchClear" aria-label="Очистить" onClick={() => setQuery("")}>
+              ×
+            </button>
+          )}
+        </div>
+      )}
+
+      {q ? (
+        <section className="section">
+          <div className="sectionTitle">
+            <h3>Найдено: {found.length}</h3>
+          </div>
+          {found.length === 0 && <p className="muted">Ничего не найдено. Попробуйте другие буквы.</p>}
+          <div className="tripRows">
+            {found.map((t) => <TripRowLink key={t.id} t={t} q={q} />)}
+          </div>
+        </section>
+      ) : latest ? (
         <section className="journey" aria-label="Последняя поездка">
           <div className="journeyHead">
             <div>
@@ -199,21 +241,19 @@ export default function Home() {
         </button>
       )}
 
-      <section className="stats">
+      {!q && <section className="stats">
         <div><strong>{totals.trips}</strong><span>{plural(totals.trips, "поездка", "поездки", "поездок")}</span></div>
         <div><strong>{totals.media}</strong><span>{plural(totals.media, "файл", "файла", "файлов")}</span></div>
-      </section>
+      </section>}
 
+      {!q && (
       <section className="section">
         <div className="sectionTitle">
           <h3>{latest ? "Все поездки" : "Мои поездки"}</h3>
           {latest && <button className="ghost" onClick={() => setOpen(true)}>+ Новая</button>}
         </div>
 
-        {trips && trips.length > 3 && (
-          <input className="searchInput" type="search" placeholder="Поиск: место, точка, заметка…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        )}
-        {latest && rest.length === 0 && <p className="muted small">{q ? "Ничего не найдено." : "Здесь появятся остальные поездки."}</p>}
+        {latest && rest.length === 0 && <p className="muted small">Здесь появятся остальные поездки.</p>}
 
         {trips && trips.length === 0 && (
           <div className="emptyCard">
@@ -225,26 +265,7 @@ export default function Home() {
         )}
 
         <div className="tripRows">
-          {rest.map((t) => {
-            const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
-            const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
-            const end = t.checkpoints[t.checkpoints.length - 1];
-            return (
-              <Link className="tripRow" key={t.id} href={routes.trip(t.id)}>
-                <span className="tripRowCover" style={{ background: end?.style.color }}>
-                  {cover ? <MediaImg id={cover} /> : <span>{end?.icon ?? "★"}</span>}
-                </span>
-                <span className="tripRowText">
-                  <strong>{t.title}</strong>
-                  <span className="muted small">
-                    {formatDate(t.date)} · {t.checkpoints.length} {plural(t.checkpoints.length, "точка", "точки", "точек")}
-                    {media ? ` · ${media} ${plural(media, "файл", "файла", "файлов")}` : ""}
-                  </span>
-                </span>
-                <span className="tripRowChevron">›</span>
-              </Link>
-            );
-          })}
+          {rest.map((t) => <TripRowLink key={t.id} t={t} />)}
         </div>
         {trips && trips.length > 0 && (
           <button className="softBtn" style={{ marginTop: 16 }} disabled={busy} onClick={() => create(demoTrip())}>
@@ -252,6 +273,7 @@ export default function Home() {
           </button>
         )}
       </section>
+      )}
 
       {account && <AccountSheet initialStage={account} onClose={() => setAccount(false)} onChanged={reload} />}
 
@@ -302,5 +324,47 @@ export default function Home() {
         </Sheet>
       )}
     </main>
+  );
+}
+
+function Highlight({ text, q }: { text: string; q?: string }) {
+  if (!q) return <>{text}</>;
+  const i = text.toLowerCase().indexOf(q);
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="hl">{text.slice(i, i + q.length)}</mark>
+      {text.slice(i + q.length)}
+    </>
+  );
+}
+
+function TripRowLink({ t, q }: { t: Trip; q?: string }) {
+  const media = t.mediaIds.length + t.checkpoints.reduce((a, c) => a + c.mediaIds.length, 0);
+  const cover = t.coverMediaId ?? t.checkpoints.find((c) => c.coverMediaId)?.coverMediaId;
+  const end = t.checkpoints[t.checkpoints.length - 1];
+  const hitPoint = q && !t.title.toLowerCase().includes(q) ? t.checkpoints.find((c) => `${c.title} ${c.description ?? ""} ${c.location?.label ?? ""}`.toLowerCase().includes(q)) : undefined;
+  return (
+    <Link className="tripRow" href={routes.trip(t.id)}>
+      <span className="tripRowCover" style={{ background: end?.style.color }}>
+        {cover ? <MediaImg id={cover} /> : <span>{end?.icon ?? "★"}</span>}
+      </span>
+      <span className="tripRowText">
+        <strong>
+          <Highlight text={t.title} q={q} />
+        </strong>
+        <span className="muted small">
+          {formatDate(t.date)} · {t.checkpoints.length} {plural(t.checkpoints.length, "точка", "точки", "точек")}
+          {media ? ` · ${media} ${plural(media, "файл", "файла", "файлов")}` : ""}
+        </span>
+        {hitPoint && (
+          <span className="small hitPoint">
+            в точке «<Highlight text={hitPoint.title} q={q} />»
+          </span>
+        )}
+      </span>
+      <span className="tripRowChevron">›</span>
+    </Link>
   );
 }

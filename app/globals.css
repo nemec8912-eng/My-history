@@ -408,3 +408,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .jsMode { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); font-size: 13px; }
 
 .searchInput { margin: 0 0 12px; }
+.searchWrap { position: relative; margin-top: 18px; }
+.searchWrap .searchInput { margin: 0; padding-left: 40px; padding-right: 40px; border-radius: 18px; min-height: 50px; background: rgba(255,255,255,.06); }
+.searchIcon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--muted); pointer-events: none; }
+.searchClear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: var(--text); font-size: 18px; }
+input[type="search"]::-webkit-search-cancel-button { display: none; }
+mark.hl { background: rgba(139,92,255,.35); color: #fff; border-radius: 4px; padding: 0 1px; }
+.hitPoint { color: #cdb9ff; }
