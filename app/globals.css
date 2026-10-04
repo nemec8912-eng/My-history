@@ -249,3 +249,7 @@ input, textarea, select { font-size: 16px; } /* iOS не зумит поле п�
 .storyCard.end .storyCardTitle { -webkit-line-clamp: 3; overflow-wrap: anywhere; }
 .syncBanner { display:block; width:100%; text-align:left; margin-top:14px; border:0; border-radius:18px; padding:14px 16px; background:#fff4e0; color:#8a4b00; font-weight:700; }
 .modalBackdrop.settled, .sheet.settled, .storyRoute.settled .storyMarker, .storyRoute.settled .storyCard, .storyRoute.settled .travelBadge { animation: none; }
+.okBar { background:#e9f8f0; color:#0f6b43; padding:10px 14px; border-radius:14px; margin:10px 0; font-size:14px; }
+.linkBtn { border:0; background:none; color:#633cff; font-weight:750; padding:10px 4px; min-height:44px; }
+.authLinks { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; }
+.accountSheet form .primary.wide { margin-top:10px; }

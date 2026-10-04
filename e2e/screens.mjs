@@ -24,6 +24,12 @@ async function run(name, browserType, device) {
     const err = await page.locator(".sheet .errorBar").textContent().catch(() => null);
     const title = await page.locator(".sheet h3").first().textContent().catch(() => null);
     log.push(`[${name}] account: title=${title} error=${err}`);
+    await page.locator(".sheet input[type=email]").fill("e2e-check@example.com");
+    await page.locator(".sheet input[type=password]").fill("wrong-password-123");
+    await page.locator(".sheet button.primary").click();
+    await page.waitForTimeout(3500);
+    log.push(`[${name}] login with wrong password -> ${await page.locator(".sheet .errorBar").last().textContent().catch(() => "no message")}`);
+    await shot("1c-login-error");
     await page.locator(".sheetClose").click();
     await page.waitForTimeout(400);
     await page.getByRole("button", { name: "Открыть пример" }).click();

@@ -53,8 +53,12 @@ export async function pingCloud(): Promise<{ ok: boolean; reason?: string }> {
 /** Человекопонятный текст ошибок входа. */
 export function authErrorText(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("invalid login credentials")) return "Неверный email или пароль.";
+  if (m.includes("email not confirmed")) return "Email ещё не подтверждён: откройте ссылку из письма Supabase, затем войдите.";
+  if (m.includes("already registered") || m.includes("already been registered")) return "Такой email уже зарегистрирован — просто войдите.";
+  if (m.includes("password should be")) return "Пароль слишком простой: минимум 6 символов.";
   if (m.includes("rate limit") || m.includes("security purposes")) return "Слишком много писем подряд. Подождите минуту и попробуйте снова.";
-  if (m.includes("expired") || m.includes("invalid")) return "Код неверный или устарел. Запросите новый код.";
+  if (m.includes("expired")) return "Ссылка или код устарели. Запросите новые.";
   if (m.includes("signups not allowed")) return "Регистрация новых пользователей выключена в настройках Supabase.";
   if (m.includes("failed to fetch") || m.includes("network")) return "Нет связи с Supabase.";
   return message;

@@ -51,7 +51,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState({ title: "", date: today(), time: "", place: "", text: "", from: "", to: "", cover: undefined as string | undefined });
 
-  const [account, setAccount] = useState(false);
+  const [account, setAccount] = useState<false | "signin" | "newPassword">(false);
+  const [authNote, setAuthNote] = useState<string | null>(null);
   const [cloud, setCloud] = useState(false);
   const [pendingLocal, setPendingLocal] = useState(0);
 
@@ -71,7 +72,16 @@ export default function Home() {
     reload();
     const sb = getSupabase();
     if (!sb) return;
+    // Ошибка из ссылки письма (например, ссылка устарела) приходит в адресе страницы.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const linkError = hash.get("error_description");
+    if (linkError) {
+      setAuthNote(linkError.includes("expired") ? "Ссылка из письма устарела — запросите новую." : linkError);
+      history.replaceState(null, "", window.location.pathname);
+    }
     const { data } = sb.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setAccount("newPassword");
+      if (event === "SIGNED_IN") setAuthNote(null);
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") reload();
     });
     return () => data.subscription.unsubscribe();
@@ -122,7 +132,7 @@ export default function Home() {
           <p className="eyebrow">Личный дневник</p>
           <h1>Моя история</h1>
         </div>
-        <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount(true)}>Я</button>
+        <button className={`avatar ${cloud ? "online" : ""}`} aria-label="Аккаунт" onClick={() => setAccount("signin")}>Я</button>
       </header>
 
       <section className="hero">
@@ -136,8 +146,10 @@ export default function Home() {
         </div>
       </section>
 
+      {authNote && <p className="errorBar">{authNote}</p>}
+
       {cloud && pendingLocal > 0 && (
-        <button className="syncBanner" onClick={() => setAccount(true)}>
+        <button className="syncBanner" onClick={() => setAccount("signin")}>
           На этом устройстве есть поездки ({pendingLocal}), которых нет в аккаунте. Перенести ›
         </button>
       )}
@@ -189,7 +201,7 @@ export default function Home() {
         )}
       </section>
 
-      {account && <AccountSheet onClose={() => setAccount(false)} onChanged={reload} />}
+      {account && <AccountSheet initialStage={account} onClose={() => setAccount(false)} onChanged={reload} />}
 
       {open && (
         <Sheet onClose={() => setOpen(false)}>
