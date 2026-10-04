@@ -4,6 +4,8 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { addMedia, addMediaFiles } from "@/lib/media/store";
 import type { MediaItem, MediaKind } from "@/lib/types";
 import { useMediaMetas, useMediaUrl } from "./useMedia";
+import { useUserData } from "@/lib/userdata";
+import { newId } from "@/lib/markerStyle";
 
 export function MediaImg({
   id,
@@ -64,14 +66,18 @@ function Lightbox({
   onClose,
   onRemove,
   onSetCover,
+  removeText,
 }: {
   items: MediaItem[];
   start: number;
   onClose: () => void;
   onRemove?: (id: string) => void;
   onSetCover?: (id: string) => void;
+  removeText?: string;
 }) {
   const [i, setI] = useState(start);
+  const [albumsOpen, setAlbumsOpen] = useState(false);
+  const { data: userData, update: updateUser } = useUserData();
   const item = items[i];
   const url = useMediaUrl(item?.id, "original");
   const touchX = useRef<number | null>(null);
@@ -110,11 +116,16 @@ function Lightbox({
               Сделать обложкой
             </button>
           )}
+          {item.kind !== "audio" && (
+            <button type="button" onClick={() => setAlbumsOpen((v) => !v)}>
+              В альбом
+            </button>
+          )}
           {onRemove && (
             <button
               type="button"
               onClick={() => {
-                if (!confirm("Убрать этот файл из момента? Сам файл на Google Диске не удаляется.")) return;
+                if (!confirm(removeText ?? "Убрать этот файл из момента? Сам файл на Google Диске не удаляется.")) return;
                 onRemove(item.id);
                 if (items.length <= 1) onClose();
                 else setI((v) => Math.min(v, items.length - 2));
@@ -128,6 +139,41 @@ function Lightbox({
           </button>
         </div>
       </div>
+      {albumsOpen && (
+        <div className="albumPick" onClick={(e) => e.stopPropagation()}>
+          <strong>Добавить в альбом</strong>
+          {(userData?.albums ?? []).map((a) => {
+            const has = a.mediaIds.includes(item.id);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                className={has ? "on" : ""}
+                onClick={() =>
+                  void updateUser((d) => ({
+                    ...d,
+                    albums: (d.albums ?? []).map((x) => (x.id === a.id ? { ...x, mediaIds: has ? x.mediaIds.filter((m) => m !== item.id) : [...x.mediaIds, item.id] } : x)),
+                  }))
+                }
+              >
+                {has ? "✓ " : "+ "}
+                {a.title} <em>{a.mediaIds.length}</em>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className="newAlbum"
+            onClick={() => {
+              const title = prompt("Название альбома", "Лучшее");
+              if (!title?.trim()) return;
+              void updateUser((d) => ({ ...d, albums: [...(d.albums ?? []), { id: newId(), title: title.trim(), mediaIds: [item.id], createdAt: new Date().toISOString() }] }));
+            }}
+          >
+            + Новый альбом
+          </button>
+        </div>
+      )}
       <div className="lightboxStage" onClick={(e) => e.stopPropagation()}>
         {!url ? (
           <span className="muted">Загрузка…</span>
@@ -159,6 +205,7 @@ export function MediaGallery({
   onRemove,
   onSetCover,
   empty,
+  removeText,
 }: {
   ids: string[];
   kinds?: MediaKind[];
@@ -166,6 +213,7 @@ export function MediaGallery({
   onRemove?: (id: string) => void;
   onSetCover?: (id: string) => void;
   empty?: string;
+  removeText?: string;
 }) {
   const metas = useMediaMetas(ids).filter((m) => kinds.includes(m.kind));
   const [open, setOpen] = useState<number | null>(null);
@@ -192,7 +240,7 @@ export function MediaGallery({
         <AudioRow key={m.id} meta={m} onRemove={onRemove} />
       ))}
       {open != null && (
-        <Lightbox items={visual} start={open} onClose={() => setOpen(null)} onRemove={onRemove} onSetCover={onSetCover} />
+        <Lightbox items={visual} start={open} onClose={() => setOpen(null)} onRemove={onRemove} onSetCover={onSetCover} removeText={removeText} />
       )}
     </div>
   );

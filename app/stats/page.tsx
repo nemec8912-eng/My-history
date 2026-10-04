@@ -10,6 +10,7 @@ import { regionShape, reverseInfo } from "@/lib/geocode";
 import { routes } from "@/lib/routes";
 import { fmtKm, hasCoords, isEvent, kmByMode, momentDate, tripDays, tripKm } from "@/lib/stats";
 import { TRAVEL } from "@/lib/travel";
+import { rub, tripSpent } from "@/lib/plan";
 import { useTrips } from "@/lib/useTrips";
 import type { TravelMode, Trip } from "@/lib/types";
 
@@ -117,6 +118,7 @@ export default function StatsPage() {
               { icon: "star", value: String(events.length), label: plural(events.length, "событие", "события", "событий"), color: "#ff8a1f" },
               { icon: "calendar", value: String(days), label: plural(days, "день в пути", "дня в пути", "дней в пути"), color: "#ffc531" },
               { icon: "pin", value: String(ru.length), label: plural(ru.length, "регион России", "региона России", "регионов России"), color: "#b46bff" },
+              ...(trips.some((t) => tripSpent(t) > 0) ? [{ icon: "star", value: rub(trips.reduce((s, t) => s + tripSpent(t), 0)), label: "потрачено в поездках", color: "#e0459b" }] : []),
             ].map((s) => (
               <div key={s.label} className="statTile" style={{ ["--tc" as string]: s.color }}>
                 <Icon name={s.icon} size={22} />

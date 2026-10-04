@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { TagFilter } from "@/components/Tags";
+import { HAPPY } from "@/components/Mood";
 import { allTags, tripHasTag } from "@/lib/tags";
 import { TabScreen } from "@/components/BottomNav";
 import { MomentsTabs } from "@/components/MomentsTabs";
@@ -74,9 +75,12 @@ function Timeline() {
   const { trips } = useTrips();
   const [tag, setTag] = useState<string | null>(useSearchParams().get("tag"));
   const tags = useMemo(() => allTags(trips ?? []), [trips]);
+  const [best, setBest] = useState(false);
+  /** «Лучшее»: высокая оценка поездки, важные моменты или радостное настроение. */
+  const isBest = (t: Trip) => (t.meta?.rating ?? 0) >= 4 || t.checkpoints.some((c) => c.importance >= 2 && c.kind === "regular") || t.checkpoints.some((c) => HAPPY.has(c.meta?.mood ?? ""));
   const years = useMemo(() => {
     const map = new Map<string, Map<string, Trip[]>>();
-    for (const t of (trips ?? []).filter((x) => tripHasTag(x, tag))) {
+    for (const t of (trips ?? []).filter((x) => tripHasTag(x, tag) && (!best || isBest(x)))) {
       const y = t.date.slice(0, 4);
       const m = t.date.slice(5, 7);
       if (!map.has(y)) map.set(y, new Map());
@@ -87,7 +91,8 @@ function Timeline() {
     return [...map.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([y, months]) => ({ y, months: [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])) }));
-  }, [trips, tag]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trips, tag, best]);
 
   return (
     <TabScreen className="timelinePage">
@@ -97,7 +102,12 @@ function Timeline() {
         <span className="ahSide right" />
       </header>
       <MomentsTabs active="timeline" />
-      <TagFilter tags={tags} value={tag} onChange={setTag} />
+      <div className="tlFilters">
+        <button className={`tagChip ${best ? "on" : ""}`} onClick={() => setBest((v) => !v)}>
+          ★ Лучшее
+        </button>
+        <TagFilter tags={tags} value={tag} onChange={setTag} />
+      </div>
       {trips && trips.length === 0 && <p className="muted">Здесь появится лента ваших воспоминаний по годам.</p>}
       <div className="timeline2">
         {years.map(({ y, months }) => (

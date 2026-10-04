@@ -15,7 +15,8 @@ export type Archive = { app: "my-history"; version: 1; exportedAt: string; trips
 
 export async function buildArchive(withPreviews: boolean, onProgress?: (s: string) => void): Promise<Blob> {
   const repo = await getRepo();
-  const trips = [...(await repo.list()), ...(await repo.listTrash())];
+  const sys = await repo.system().catch(() => null);
+  const trips = [...(await repo.list()), ...(await repo.listTrash()), ...(sys ? [sys] : [])];
   const ids = Array.from(new Set(trips.flatMap(tripMediaIds)));
   const storage = new Map<string, ArchiveMedia["storage"]>();
   const sb = getSupabase();
@@ -50,7 +51,8 @@ export async function restoreArchive(file: File, onProgress?: (s: string) => voi
   const data = JSON.parse(await file.text()) as Archive;
   if (data?.app !== "my-history" || !Array.isArray(data.trips)) throw new Error("Это не архив «Моей истории»");
   const repo = await getRepo();
-  const have = new Set([...(await repo.list()), ...(await repo.listTrash())].map((t) => t.id));
+  const sys = await repo.system().catch(() => null);
+  const have = new Set([...(await repo.list()), ...(await repo.listTrash()), ...(sys ? [sys] : [])].map((t) => t.id));
   let previews = 0;
   for (const m of data.media ?? []) {
     const { thumb, storage: _s, ...meta } = m;
@@ -61,6 +63,14 @@ export async function restoreArchive(file: File, onProgress?: (s: string) => voi
   let added = 0;
   let skipped = 0;
   for (const t of data.trips) {
+    if (t.meta?.kind === "system" && sys) {
+      // Альбомы и «Хочу поехать» из архива добавляем к текущим.
+      const a = t.meta.userData ?? {};
+      const b = sys.meta?.userData ?? {};
+      const merge = <T extends { id: string }>(x: T[] = [], y: T[] = []) => [...y, ...x.filter((i) => !y.some((j) => j.id === i.id))];
+      await repo.save({ ...sys, meta: { ...sys.meta, userData: { albums: merge(a.albums, b.albums), wishes: merge(a.wishes, b.wishes), packTemplates: merge(a.packTemplates, b.packTemplates) } } });
+      continue;
+    }
     if (have.has(t.id)) {
       skipped++;
       continue;

@@ -4,6 +4,17 @@
  */
 import { getRepo } from "../repo";
 import { tripMediaIds } from "../stats";
+import type { Trip } from "../types";
+
+/** Все файлы, которые где-то используются: поездки, корзина, альбомы. */
+async function usedIds(): Promise<Set<string>> {
+  const repo = await getRepo();
+  const sys = await repo.system().catch(() => null);
+  const trips: Trip[] = [...(await repo.list()), ...(await repo.listTrash())];
+  const ids = trips.flatMap(tripMediaIds);
+  for (const a of sys?.meta?.userData?.albums ?? []) ids.push(...a.mediaIds);
+  return new Set(ids);
+}
 import { getSupabase, MEDIA_BUCKET } from "../supabase";
 import { deleteFromDrive, getDriveToken } from "./gdrive";
 import { forgetLocalMedia, listLocalMediaIds, getMediaMeta } from "./store";
@@ -14,7 +25,7 @@ const HOUR = 3600_000;
 
 export async function findOrphans(): Promise<Orphan[]> {
   const repo = await getRepo();
-  const used = new Set([...(await repo.list()), ...(await repo.listTrash())].flatMap(tripMediaIds));
+  const used = await usedIds();
   const out = new Map<string, Orphan>();
   const sb = getSupabase();
   if (sb && repo.mode === "cloud") {
@@ -48,7 +59,7 @@ export async function deleteOrphans(list: Orphan[], onProgress?: (s: string) => 
   const sb = getSupabase();
   const repo = await getRepo();
   // Перепроверяем прямо перед удалением: вдруг файл успели снова добавить в момент.
-  const used = new Set([...(await repo.list()), ...(await repo.listTrash())].flatMap(tripMediaIds));
+  const used = await usedIds();
   let deleted = 0;
   let skipped = 0;
   const token = getDriveToken();

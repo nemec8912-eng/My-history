@@ -18,6 +18,9 @@ import { fmtKm, hasCoords, isEvent, kmByMode, tripCover, tripDateRange, tripDays
 import { TRAVEL } from "@/lib/travel";
 import { parseGpx, routeCoords } from "@/lib/gpx";
 import { shareTripHtml } from "@/lib/shareHtml";
+import { rub, tripSpent } from "@/lib/plan";
+import { StarRating } from "@/components/Mood";
+import { CollageSheet } from "@/components/CollageSheet";
 import { formatDate, formatDuration, minutesOf, plural } from "@/lib/format";
 import { createCheckpoint } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
@@ -86,6 +89,8 @@ function TripActions({ trip, onTrack }: { trip: Trip; onTrack: (r: Trip["route"]
       alert(er instanceof Error ? er.message : String(er));
     }
   }
+  const [collage, setCollage] = useState(false);
+  const spent = tripSpent(trip);
   return (
     <div className="tripActions">
       {hasPhotos && (
@@ -93,6 +98,21 @@ function TripActions({ trip, onTrack }: { trip: Trip; onTrack: (r: Trip["route"]
           <Icon name="play" size={18} /> Видео-итог
         </Link>
       )}
+      {hasPhotos && (
+        <button className="taBtn" onClick={() => setCollage(true)}>
+          <Icon name="grid" size={18} /> Коллаж
+        </button>
+      )}
+      <Link className="taBtn" href={routes.plan(trip.id)}>
+        <Icon name="note" size={18} /> {isEvent(trip) ? "Расходы, документы" : "Сборы, расходы, документы"}
+        {spent > 0 ? ` · ${rub(spent)}` : ""}
+      </Link>
+      {hasPhotos && (
+        <Link className="taBtn" href={routes.book({ trip: trip.id })}>
+          <Icon name="photo" size={18} /> Фотокнига
+        </Link>
+      )}
+      {collage && <CollageSheet trip={trip} onClose={() => setCollage(false)} />}
       <button className="taBtn" onClick={share} disabled={Boolean(busy)}>
         <Icon name="share" size={18} /> {busy ? (busy.length > 8 ? busy : "Готовлю…") : "Поделиться"}
       </button>
@@ -260,6 +280,10 @@ export function TripView() {
       {tab === "overview" && (
         <section className="tabBody">
           <TripStatTiles trip={trip} />
+          <div className="tripRating">
+            <StarRating value={trip.meta?.rating} onChange={(rating) => update({ ...trip, meta: { ...trip.meta, rating } })} />
+            <span className="muted">{trip.meta?.rating ? "ваша оценка" : "оцените"}</span>
+          </div>
           <TripActions trip={trip} onTrack={(route) => update({ ...trip, route })} />
           {trip.description && <p className="tripDesc">{trip.description}</p>}
           {located.length > 0 && (

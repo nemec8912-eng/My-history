@@ -78,13 +78,25 @@ export type CheckpointMeta = {
   type?: "photo" | "video" | "audio" | "note";
   /** Свои метки: «рыбалка», «дача», «концерт». */
   tags?: string[];
+  /** Настроение момента (эмодзи). */
+  mood?: string;
 };
 
 export type TripMeta = {
   /** Дата окончания поездки YYYY-MM-DD. */
   endDate?: string;
   /** «trip» — поездка с маршрутом (по умолчанию), «event» — событие без поездки: просто вышел, и что-то случилось. */
-  kind?: "trip" | "event";
+  kind?: "trip" | "event" | "system";
+  /** Оценка поездки 1–5 звёзд. */
+  rating?: number;
+  /** Сборы: чек-лист вещей. */
+  packing?: PackItem[];
+  /** Расходы поездки (в рублях). */
+  expenses?: Expense[];
+  /** Документы: билеты, брони, чеки (PDF, фото). */
+  docs?: TripDoc[];
+  /** Только для служебной записи (kind = "system"): альбомы, «Хочу поехать», свои шаблоны сборов. */
+  userData?: UserData;
   /** Когда перенесено в корзину (ISO). Через 30 дней удаляется окончательно. */
   deletedAt?: string;
 };
@@ -187,3 +199,28 @@ export type MediaItem = {
   /** Где снято (из EXIF GPS). */
   gps?: GeoPoint;
 };
+
+/* ───────────── Сборы, расходы, документы ───────────── */
+
+export type PackItem = { id: string; text: string; done: boolean };
+
+export type ExpenseCategory = "road" | "stay" | "food" | "fun" | "shop" | "other";
+export type Expense = { id: string; title: string; amount: number; category: ExpenseCategory; date?: string };
+
+/** Документ поездки. Файл лежит на Google Диске, в Supabase Storage или только на устройстве. */
+export type TripDoc = {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  provider: "gdrive" | "supabase" | "local";
+  location?: { fileId?: string; path?: string };
+  addedAt: string;
+};
+
+/* ───────────── Данные пользователя вне поездок ───────────── */
+
+export type Album = { id: string; title: string; mediaIds: MediaId[]; createdAt: string };
+export type Wish = { id: string; title: string; location?: Location; note?: string; createdAt: string; doneTripId?: string };
+export type PackTemplate = { id: string; title: string; items: string[] };
+export type UserData = { albums?: Album[]; wishes?: Wish[]; packTemplates?: PackTemplate[] };

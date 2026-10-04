@@ -14,6 +14,7 @@ import { hasCoords, isEvent, momentDate } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import { TagFilter } from "@/components/Tags";
 import { routeCoords } from "@/lib/gpx";
+import { useUserData } from "@/lib/userdata";
 import { allTags, cpHasTag, tripHasTag } from "@/lib/tags";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
@@ -27,6 +28,9 @@ function MapScreen() {
   const [sel, setSel] = useState<string | null>(null);
   const [base, setBase] = useState<"map" | "satellite">("map");
   const [tag, setTag] = useState<string | null>(null);
+  const [heatMode, setHeatMode] = useState(false);
+  const [showWishes, setShowWishes] = useState(true);
+  const { data: user } = useUserData();
   const tags = useMemo(() => allTags(trips ?? []), [trips]);
 
   const years = useMemo(() => Array.from(new Set((trips ?? []).map((t) => t.date.slice(0, 4)))).sort().reverse(), [trips]);
@@ -63,6 +67,10 @@ function MapScreen() {
     return { points, lines, index };
   }, [shown]);
 
+  const wishes = useMemo(() => (user?.wishes ?? []).filter((w) => !w.doneTripId && w.location && (w.location.lat || w.location.lon)), [user]);
+  const wishPoints: MapPoint[] = !onlyTrip && showWishes ? wishes.map((w) => ({ id: `wish:${w.id}`, lat: w.location!.lat, lon: w.location!.lon, color: "#ffc531", icon: "⭐", label: w.title })) : [];
+  const heat = useMemo(() => (heatMode ? shown.flatMap((t) => t.checkpoints.filter(hasCoords).map((c) => [c.location!.lat, c.location!.lon] as [number, number])) : []), [heatMode, shown]);
+  const selWish = sel?.startsWith("wish:") ? wishes.find((w) => `wish:${w.id}` === sel) : null;
   const selected = sel ? index.get(sel) : null;
   const selTrip = selected ? shown.find((t) => t.id === selected.tripId) : null;
   const selCp = selTrip?.checkpoints.find((c) => c.id === selected?.cpId);
@@ -81,7 +89,7 @@ function MapScreen() {
           </button>
         </header>
 
-        {trips && <LeafletMap points={points} lines={lines} onSelect={setSel} base={base} />}
+        {trips && <LeafletMap points={heatMode ? wishPoints : [...points, ...wishPoints]} lines={heatMode ? [] : lines} heat={heat} onSelect={setSel} base={base} />}
 
         {trips && points.length === 0 && (
           <div className="mapEmpty">
@@ -99,6 +107,14 @@ function MapScreen() {
 
         {!onlyTrip && years.length > 0 && (
           <div className="yearChips">
+            <button className={heatMode ? "on" : ""} onClick={() => setHeatMode((v) => !v)}>
+              🔥 Тепловая
+            </button>
+            {wishes.length > 0 && (
+              <button className={showWishes ? "on" : ""} onClick={() => setShowWishes((v) => !v)}>
+                ⭐ Хочу поехать
+              </button>
+            )}
             <button className={year === "all" ? "on" : ""} onClick={() => setYear("all")}>
               Все поездки
             </button>
@@ -108,6 +124,29 @@ function MapScreen() {
               </button>
             ))}
           </div>
+        )}
+
+        {selWish && (
+          <Link className="mapCard" href={routes.wishes}>
+            <span className="mcThumb" style={{ background: "#ffc531" }}>
+              <span>⭐</span>
+            </span>
+            <span className="mcText">
+              <strong>{selWish.title}</strong>
+              <span>{selWish.location?.label}</span>
+              <span className="muted small">Хочу поехать · открыть список</span>
+            </span>
+            <button
+              className="mcClose"
+              aria-label="Закрыть"
+              onClick={(e) => {
+                e.preventDefault();
+                setSel(null);
+              }}
+            >
+              ×
+            </button>
+          </Link>
         )}
 
         {selTrip && selCp && (

@@ -16,6 +16,7 @@ import { fetchWeather } from "@/lib/weather";
 import { currentPosition, reverseInfo } from "@/lib/geocode";
 import { TagInput, useAllTags } from "@/components/Tags";
 import { AddressInput } from "@/components/AddressInput";
+import { MoodPicker } from "@/components/Mood";
 import { appendSpoken, VoiceButton } from "@/components/VoiceInput";
 import type { CheckpointMeta, Location, MediaItem, Weather } from "@/lib/types";
 
@@ -52,6 +53,7 @@ export function NewMoment() {
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [address, setAddress] = useState("");
+  const [mood, setMood] = useState<string | undefined>();
   const tagHints = useAllTags();
   const [target, setTarget] = useState<string>(preset ?? "event");
   const [weather, setWeather] = useState<Weather | null>(null);
@@ -138,7 +140,7 @@ export function NewMoment() {
         location: loc,
         mediaIds: media.map((m) => m.id),
         coverMediaId: firstImage?.id,
-        meta: { date, type, ...(w ? { weather: w } : {}), ...(tags.length ? { tags } : {}), ...(address.trim() ? { address: address.trim() } : {}) },
+        meta: { date, type, ...(w ? { weather: w } : {}), ...(tags.length ? { tags } : {}), ...(address.trim() ? { address: address.trim() } : {}), ...(mood ? { mood } : {}) },
       });
       const repo = await getRepo();
       let tripId: string;
@@ -267,6 +269,7 @@ export function NewMoment() {
           <VoiceButton onText={(t) => setText((p) => appendSpoken(p, t))} />
           <input placeholder="Название (необязательно)" value={title} onChange={(e) => setTitle(e.target.value)} />
           <TagInput value={tags} onChange={setTags} suggestions={tagHints} />
+          <MoodPicker value={mood} onChange={setMood} />
         </div>
         <div className="nmRow">
           <span className="nmLabel">

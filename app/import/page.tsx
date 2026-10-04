@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { readTakeoutFiles, readTakeoutZip, type TakeoutItem } from "@/lib/takeout";
 import { Icon } from "@/components/Icon";
 import { readPhotoInfo, localIso } from "@/lib/exif";
 import { plural } from "@/lib/format";
@@ -22,16 +23,47 @@ const dayLabel = (d: string) => {
   return `${day} ${RU_MONTHS_GEN[m - 1]} ${y}`;
 };
 
-function Thumb({ file }: { file: File }) {
+/** Превью: файл из галереи — сразу; из архива — только когда плитка видна на экране. */
+function Thumb({ f }: { f: ImportFile }) {
   const [url, setUrl] = useState<string | null>(null);
+  const el = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (!file.type.startsWith("image/")) return;
-    const u = URL.createObjectURL(file);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [file]);
-  return url ? <img src={url} alt="" loading="lazy" /> : <span className="impVideo"><Icon name="video" size={18} /></span>;
+    if (f.kind !== "image") return;
+    let u: string | null = null;
+    let alive = true;
+    const show = (file: File) => {
+      if (!alive || !file.type.startsWith("image/") || /heic|heif/i.test(file.type)) return;
+      u = URL.createObjectURL(file);
+      setUrl(u);
+    };
+    if (f.file) show(f.file);
+    else if (f.load && el.current) {
+      const io = new IntersectionObserver((ents) => {
+        if (ents.some((x) => x.isIntersecting)) {
+          io.disconnect();
+          f.load!().then(show).catch(() => undefined);
+        }
+      });
+      io.observe(el.current);
+      return () => {
+        alive = false;
+        io.disconnect();
+        if (u) URL.revokeObjectURL(u);
+      };
+    }
+    return () => {
+      alive = false;
+      if (u) URL.revokeObjectURL(u);
+    };
+  }, [f]);
+  return (
+    <span ref={el} className="impThumbIn">
+      {url ? <img src={url} alt="" loading="lazy" /> : <span className="impVideo"><Icon name={f.kind === "video" ? "video" : "photo"} size={18} /></span>}
+    </span>
+  );
 }
+
+const MAX_DAYS_PREVIEW = 40;
 
 type Target = "days" | "trip" | string;
 
@@ -47,15 +79,19 @@ export default function ImportPage() {
   const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const days = useMemo(() => planImport(files), [files]);
+  const [year, setYear] = useState("all");
+  const [skipped, setSkipped] = useState(0);
+  const years = useMemo(() => Array.from(new Set(files.map((f) => f.takenAt.slice(0, 4)))).sort().reverse(), [files]);
+  const shown = useMemo(() => (year === "all" ? files : files.filter((f) => f.takenAt.startsWith(year))), [files, year]);
+  const days = useMemo(() => planImport(shown), [shown]);
   const clusters = days.flatMap((d) => d.clusters);
-  const withGps = files.filter((f) => f.gps).length;
-  const withExif = files.filter((f) => f.fromExif).length;
+  const withGps = shown.filter((f) => f.gps).length;
+  const withExif = shown.filter((f) => f.fromExif).length;
 
   // Названия мест по GPS (по одному запросу в секунду, с кэшем на устройстве).
   useEffect(() => {
     let alive = true;
-    for (const c of clusters) {
+    for (const c of clusters.slice(0, 60)) {
       if (!c.center || c.key in places) continue;
       reverseInfo(c.center.lat, c.center.lon, 16).then((info) => alive && setPlaces((p) => ({ ...p, [c.key]: info })));
     }
@@ -80,6 +116,34 @@ export default function ImportPage() {
     setReading(false);
   }
 
+  /** Google Фото через Takeout: .zip архив(ы), распакованная папка или файлы вместе с .json. */
+  async function pickTakeout(e: ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!list.length) return;
+    setReading(true);
+    setErr(null);
+    try {
+      const zips = list.filter((f) => /\.zip$/i.test(f.name));
+      const rest = list.filter((f) => !/\.zip$/i.test(f.name));
+      const items: TakeoutItem[] = [];
+      for (const z of zips) items.push(...(await readTakeoutZip(z, setProgress)));
+      if (rest.length) items.push(...(await readTakeoutFiles(rest, setProgress)));
+      const dated = items.filter((i) => i.takenAt);
+      setSkipped((n) => n + items.length - dated.length);
+      setFiles((f) => [
+        ...f,
+        ...dated.map((i) => ({ key: i.key + newId(), load: i.load, name: i.name, kind: i.kind, takenAt: i.takenAt!, fromExif: i.fromMeta || Boolean(i.takenAt), gps: i.gps })),
+      ]);
+      if (!items.length) setErr("В архиве не нашлось фото или видео.");
+    } catch (er) {
+      setErr(er instanceof Error ? er.message : String(er));
+    } finally {
+      setProgress(null);
+      setReading(false);
+    }
+  }
+
   function drop(c: ImportCluster) {
     const keys = new Set(c.files.map((f) => f.key));
     setFiles((f) => f.filter((x) => !keys.has(x.key)));
@@ -95,15 +159,23 @@ export default function ImportPage() {
 
   async function run() {
     setErr(null);
-    if (!files.length) return;
+    if (!shown.length) return;
     try {
       const repo = await getRepo();
       const ids = new Map<string, string>();
       let n = 0;
       // Файлы сохраняются через обычный механизм: на устройство, затем в облако / на Google Диск.
-      for (const f of files) {
-        setProgress(`Сохраняю ${++n} из ${files.length}…`);
-        ids.set(f.key, (await addMedia(f.file)).id);
+      for (const f of shown) {
+        setProgress(`Сохраняю ${++n} из ${shown.length}…`);
+        const file = f.file ?? (await f.load!());
+        ids.set(f.key, (await addMedia(file)).id);
+      }
+      // Названия мест для всех моментов (для больших архивов — по одному в секунду).
+      const need = clusters.filter((c) => c.center && !(c.key in places));
+      let k = 0;
+      for (const c of need) {
+        setProgress(`Определяю места: ${++k} из ${need.length}…`);
+        places[c.key] = await reverseInfo(c.center!.lat, c.center!.lon, 16).catch(() => null);
       }
       setProgress("Раскладываю по моментам…");
       const toCheckpoint = (c: ImportCluster): Checkpoint => {
@@ -177,15 +249,47 @@ export default function ImportPage() {
         <input type="file" accept="image/*,video/*" multiple onChange={pick} />
       </label>
 
+      <div className="takeoutBox">
+        <strong>Google Фото (через Google Takeout)</strong>
+        <span className="muted small">
+          На takeout.google.com выберите «Google Фото» и скачайте архив. Здесь выберите сам .zip (можно несколько) — даты и места возьмутся из описаний Google.
+        </span>
+        <div className="takeoutBtns">
+          <label className="softBtn">
+            Архив .zip
+            <input type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple hidden onChange={pickTakeout} />
+          </label>
+          <label className="softBtn">
+            Распакованная папка
+            <input type="file" multiple hidden onChange={pickTakeout} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} />
+          </label>
+        </div>
+        {reading && progress && <p className="hint">{progress}</p>}
+      </div>
+
       {files.length > 0 && (
         <>
           <p className="hint impHint">
-            {files.length} {plural(files.length, "файл", "файла", "файлов")} · {days.length} {plural(days.length, "день", "дня", "дней")} · {clusters.length}{" "}
+            {shown.length} {plural(shown.length, "файл", "файла", "файлов")} · {days.length} {plural(days.length, "день", "дня", "дней")} · {clusters.length}{" "}
             {plural(clusters.length, "момент", "момента", "моментов")}. Дата съёмки найдена у {withExif}, место — у {withGps}.
-            {withGps < files.length ? " У остальных место можно указать потом в «Редактировать»." : ""}
+            {withGps < shown.length ? " У остальных место можно указать потом в «Редактировать»." : ""}
           </p>
 
-          {days.map((d) => (
+          {years.length > 1 && (
+            <div className="yearChips static">
+              <button className={year === "all" ? "on" : ""} onClick={() => setYear("all")}>
+                Все годы
+              </button>
+              {years.map((y) => (
+                <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
+                  {y}
+                </button>
+              ))}
+            </div>
+          )}
+          {skipped > 0 && <p className="hint">Без даты съёмки (пропущены): {skipped}.</p>}
+          {days.length > MAX_DAYS_PREVIEW && <p className="hint">Показаны первые {MAX_DAYS_PREVIEW} дней из {days.length} — импортируются все.</p>}
+          {days.slice(0, MAX_DAYS_PREVIEW).map((d) => (
             <section key={d.date} className="impDay">
               <h2>
                 {dayLabel(d.date)} <span className="muted small">· {d.count}</span>
@@ -207,7 +311,7 @@ export default function ImportPage() {
                   <div className="impThumbs">
                     {c.files.slice(0, 12).map((f) => (
                       <span key={f.key} className="impThumb">
-                        <Thumb file={f.file} />
+                        <Thumb f={f} />
                       </span>
                     ))}
                     {c.files.length > 12 && <span className="impThumb more">+{c.files.length - 12}</span>}
@@ -239,7 +343,7 @@ export default function ImportPage() {
 
           {err && <p className="errorBar">{err}</p>}
           <button className="primary wide nmBottomSave" onClick={run} disabled={Boolean(progress) || reading}>
-            {progress ?? `Импортировать ${files.length} ${plural(files.length, "файл", "файла", "файлов")}`}
+            {progress ?? `Импортировать ${shown.length} ${plural(shown.length, "файл", "файла", "файлов")}`}
           </button>
         </>
       )}

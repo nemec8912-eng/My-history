@@ -13,6 +13,7 @@ import { plural } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { fmtKm, hasCoords, isEvent, momentDate, tripDateRange, tripDays, tripKm, tripMediaIds } from "@/lib/stats";
 import { allTags } from "@/lib/tags";
+import { rub, tripSpent } from "@/lib/plan";
 import { useTrips } from "@/lib/useTrips";
 import type { Checkpoint, Trip } from "@/lib/types";
 
@@ -55,6 +56,7 @@ function YearRecap() {
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
   const tags = allTags(trips).slice(0, 5);
+  const spent = trips.reduce((s, t) => s + tripSpent(t), 0);
   const points: MapPoint[] = moments.filter(({ c }) => hasCoords(c)).map(({ t, c }) => ({ id: `${t.id}:${c.id}`, lat: c.location!.lat, lon: c.location!.lon, color: c.style.color, photoId: c.coverMediaId, icon: c.icon ?? "📍" }));
 
   return (
@@ -96,6 +98,7 @@ function YearRecap() {
               { icon: "photo", value: String(photos), label: "фото", color: "#b46bff" },
               { icon: "video", value: String(videos), label: "видео", color: "#ff4d5e" },
               { icon: "pin", value: String(cities.size), label: plural(cities.size, "город", "города", "городов"), color: "#14a3c7" },
+              ...(spent > 0 ? [{ icon: "star", value: rub(spent), label: "потрачено в поездках", color: "#e0459b" }] : []),
             ].map((s) => (
               <div key={s.label} className="statTile" style={{ ["--tc" as string]: s.color }}>
                 <Icon name={s.icon} size={22} />
@@ -144,6 +147,10 @@ function YearRecap() {
           )}
 
           <section className="statsBlock yrFacts">
+            <Link href={routes.book({ year: y })} className="mTrip">
+              <Icon name="photo" size={18} /> Фотокнига {y} года (PDF)
+              <Icon name="chevron" size={16} />
+            </Link>
             {first && (
               <Link href={routes.moment(first.t.id, first.c.id)} className="mTrip">
                 <Icon name="calendar" size={18} /> Первый момент года: {first.c.title}

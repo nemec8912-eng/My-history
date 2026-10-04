@@ -9,7 +9,7 @@ const TABS = [
   { href: routes.home, icon: "home", label: "Главная", match: (p: string) => p === "/" },
   { href: routes.map, icon: "map", label: "Карта", match: (p: string) => p.startsWith("/map") },
   { href: routes.newMoment(), icon: "plus", label: "", match: () => false, fab: true },
-  { href: routes.timeline, icon: "moments", label: "Моменты", match: (p: string) => /^\/(timeline|photos|videos)/.test(p) },
+  { href: routes.timeline, icon: "moments", label: "Моменты", match: (p: string) => /^\/(timeline|photos|videos|albums?)/.test(p) },
   { href: routes.me, icon: "user", label: "Я", match: (p: string) => p.startsWith("/me") },
 ];
 

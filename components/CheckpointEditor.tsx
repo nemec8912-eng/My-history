@@ -10,6 +10,7 @@ import { PlacePicker } from "./PlacePicker";
 import { reverseGeocode } from "@/lib/geocode";
 import { TagInput, useAllTags } from "./Tags";
 import { AddressInput } from "./AddressInput";
+import { MoodPicker } from "./Mood";
 import { appendSpoken, VoiceButton } from "./VoiceInput";
 import { TRAVEL, TRAVEL_IDS } from "@/lib/travel";
 
@@ -171,6 +172,11 @@ export function CheckpointEditor({
             }))
           }
         />
+      </div>
+
+      <div className="fieldBlock">
+        <span className="fieldLabel">Настроение</span>
+        <MoodPicker value={cp.meta?.mood} onChange={(m) => setMeta({ mood: m })} />
       </div>
 
       <div className="fieldBlock">

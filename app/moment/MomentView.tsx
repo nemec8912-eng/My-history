@@ -14,6 +14,7 @@ import { hasCoords, isEvent, momentDate } from "@/lib/stats";
 import { useTrip } from "@/lib/useTrip";
 import { fetchWeather } from "@/lib/weather";
 import { shareTripHtml } from "@/lib/shareHtml";
+import { ThenNow } from "@/components/ThenNow";
 import type { Checkpoint } from "@/lib/types";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
@@ -178,6 +179,7 @@ export function MomentView() {
               <strong>{short || cp.title}</strong>
               <span>{regionParts.length ? regionParts.join(",").trim() : short ? cp.title : trip.title}</span>
             </div>
+            {cp.meta?.mood && <span className="mMood" title="Настроение">{cp.meta.mood}</span>}
             {w && (
               <span className="mWeather" title={w.label}>
                 {w.icon} {w.temp > 0 ? "+" : ""}
@@ -219,6 +221,14 @@ export function MomentView() {
           <div className="miniMap">
             <LeafletMap interactive={false} points={[{ id: cp.id, lat: cp.location!.lat, lon: cp.location!.lon, color: cp.style.color, photoId: cp.coverMediaId, icon: cp.icon ?? "📍", label: short || cp.title }]} />
           </div>
+        )}
+
+        <ThenNow trip={trip} cp={cp} />
+        {hasCoords(cp) && (
+          <Link className="mTrip nearLink" href={routes.nearby(cp.location!.lat, cp.location!.lon)}>
+            <Icon name="star" size={18} /> Интересное рядом
+            <Icon name="chevron" size={16} />
+          </Link>
         )}
 
         <Link className="mTrip" href={routes.trip(trip.id)}>

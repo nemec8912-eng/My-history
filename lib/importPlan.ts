@@ -7,7 +7,10 @@ import type { GeoPoint } from "./types";
 
 export type ImportFile = {
   key: string;
-  file: File;
+  /** Файл уже в памяти (из галереи) или загружается по требованию (из архива Takeout). */
+  file?: File;
+  load?: () => Promise<File>;
+  name?: string;
   takenAt: string; // YYYY-MM-DDTHH:MM:SS
   fromExif: boolean;
   gps?: GeoPoint;

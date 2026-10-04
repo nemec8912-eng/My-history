@@ -26,10 +26,16 @@ export interface TripRepo {
   restore(id: string): Promise<void>;
   /** Удаляет навсегда (сами файлы фото/видео на Google Диске не трогаются). */
   purge(id: string): Promise<void>;
+  /** Служебная запись с альбомами, «Хочу поехать» и шаблонами (синхронизируется как обычная поездка). */
+  system(): Promise<Trip | null>;
 }
 
+export const isSystem = (t: Trip) => t.meta?.kind === "system";
+
 export const TRASH_DAYS = 30;
-const isTrashed = (t: Trip) => Boolean(t.meta?.deletedAt);
+const isTrashed = (t: Trip) => Boolean(t.meta?.deletedAt) && t.meta?.kind !== "system";
+/** Не показывается в списках: в корзине или служебная запись. */
+const hidden = (t: Trip) => Boolean(t.meta?.deletedAt) || t.meta?.kind === "system";
 const expired = (t: Trip) => Date.now() - new Date(t.meta!.deletedAt!).getTime() > TRASH_DAYS * 86_400_000;
 const trashed = (t: Trip): Trip => ({ ...t, meta: { ...t.meta, deletedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() });
 const restored = (t: Trip): Trip => {
@@ -142,7 +148,7 @@ const localRepo: TripRepo = {
   mode: "local",
   async list() {
     await migrateLegacy();
-    return sortTrips((await readLocal()).filter((t) => !isTrashed(t)));
+    return sortTrips((await readLocal()).filter((t) => !hidden(t)));
   },
   async get(id) {
     return (await readLocal()).find((t) => t.id === id) ?? null;
@@ -170,6 +176,9 @@ const localRepo: TripRepo = {
   },
   async purge(id) {
     await writeLocal((await readLocal()).filter((t) => t.id !== id));
+  },
+  async system() {
+    return (await readLocal()).find(isSystem) ?? null;
   },
 };
 
@@ -441,7 +450,7 @@ function cloudRepo(ownerId: string): TripRepo {
   const repo: TripRepo = {
     mode: "cloud",
     async list() {
-      return (await all()).filter((t) => !isTrashed(t));
+      return (await all()).filter((t) => !hidden(t));
     },
     async get(id) {
       if ((await getIds(PENDING_SAVES)).includes(id)) {
@@ -487,6 +496,9 @@ function cloudRepo(ownerId: string): TripRepo {
     async restore(id) {
       const t = (await all()).find((x) => x.id === id);
       if (t) await repo.save(restored(t));
+    },
+    async system() {
+      return (await all()).find(isSystem) ?? null;
     },
     async purge(id) {
       await writeLocal((await readLocal(CACHE_KEY)).filter((t) => t.id !== id), CACHE_KEY).catch(() => undefined);

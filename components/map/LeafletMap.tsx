@@ -51,6 +51,7 @@ export function LeafletMap({
   points,
   lines = [],
   areas = [],
+  heat = [],
   onSelect,
   labels = true,
   interactive = true,
@@ -63,6 +64,8 @@ export function LeafletMap({
   labels?: boolean;
   interactive?: boolean;
   areas?: MapArea[];
+  /** Тепловая карта: точки, где вы бывали (чем гуще, тем ярче). */
+  heat?: [number, number][];
   className?: string;
   base?: "map" | "satellite";
 }) {
@@ -71,7 +74,7 @@ export function LeafletMap({
   const baseRef = useRef(base);
   const onSel = useRef(onSelect);
   onSel.current = onSelect;
-  const key = JSON.stringify([points.map((p) => [p.id, p.lat, p.lon, p.photoId, p.color, p.label]), lines.map((l) => [l.id, l.coords.length, l.color]), areas.map((a) => a.id)]);
+  const key = JSON.stringify([points.map((p) => [p.id, p.lat, p.lon, p.photoId, p.color, p.label]), lines.map((l) => [l.id, l.coords.length, l.color]), areas.map((a) => a.id), heat.length, heat[0], heat[heat.length - 1]]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +117,12 @@ export function LeafletMap({
         /* повреждённая геометрия — просто не рисуем */
       }
     }
+    const heatBounds: [number, number][] = [];
+    for (const h of heat) {
+      L.circleMarker(h, { radius: 26, stroke: false, fillColor: "#ff6a2b", fillOpacity: 0.16, interactive: false }).addTo(layer);
+      L.circleMarker(h, { radius: 9, stroke: false, fillColor: "#ffc531", fillOpacity: 0.35, interactive: false }).addTo(layer);
+      heatBounds.push(h);
+    }
     for (const ln of lines) {
       if (ln.coords.length < 2) continue;
       L.polyline(ln.coords, { color: ln.color, weight: 9, opacity: 0.18, lineCap: "round" }).addTo(layer);
@@ -136,6 +145,7 @@ export function LeafletMap({
       }
       bounds.push([p.lat, p.lon]);
     }
+    bounds.push(...heatBounds);
     if (bounds.length === 1) map.setView(bounds[0], 13);
     else if (bounds.length > 1) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }

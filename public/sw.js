@@ -1,8 +1,8 @@
 /* Service worker «Моя история»: приложение открывается без сети.
    Данные поездок и фото хранятся в IndexedDB, здесь кэшируется только оболочка сайта. */
-const CACHE = "my-history-v5";
+const CACHE = "my-history-v6";
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, "");
-const PAGES = ["/", "/trip/", "/place/", "/moment/", "/new/", "/map/", "/timeline/", "/photos/", "/videos/", "/search/", "/me/", "/import/", "/trash/", "/stats/", "/year/", "/recap/"].map((p) => BASE + p);
+const PAGES = ["/", "/trip/", "/place/", "/moment/", "/new/", "/map/", "/timeline/", "/photos/", "/videos/", "/search/", "/me/", "/import/", "/trash/", "/stats/", "/year/", "/recap/", "/nearby/", "/wishes/", "/albums/", "/album/", "/achievements/", "/plan/", "/book/"].map((p) => BASE + p);
 const PRECACHE = [...PAGES, BASE + "/icons/icon-192.png", BASE + "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -102,7 +102,7 @@ async function checkThisDay() {
   const seen = new Set();
   const hits = [];
   for (const t of all) {
-    if (!t || seen.has(t.id) || (t.meta && t.meta.deletedAt)) continue;
+    if (!t || seen.has(t.id) || (t.meta && (t.meta.deletedAt || t.meta.kind === "system"))) continue;
     seen.add(t.id);
     const dates = [t.date, ...(t.checkpoints || []).map((c) => c.meta && c.meta.date)].filter(Boolean);
     const d = dates.find((x) => x.slice(5) === md && x.slice(0, 4) < today.slice(0, 4));

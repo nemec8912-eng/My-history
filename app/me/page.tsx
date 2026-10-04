@@ -59,6 +59,10 @@ export default function MePage() {
         {[
           { href: routes.stats, icon: "map", label: "Статистика и регионы" },
           { href: routes.year(), icon: "star", label: "Итоги года" },
+          { href: routes.achievements, icon: "star", label: "Достижения" },
+          { href: routes.wishes, icon: "pin", label: "Хочу поехать" },
+          { href: routes.nearby(), icon: "locate", label: "Интересное рядом" },
+          { href: routes.albums, icon: "grid", label: "Альбомы" },
           { href: routes.importPhotos, icon: "grid", label: "Импорт из галереи" },
           { href: routes.trash, icon: "trash", label: "Корзина" },
         ].map((l) => (
