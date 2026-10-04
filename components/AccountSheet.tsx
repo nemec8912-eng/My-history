@@ -7,6 +7,7 @@ import { asset } from "@/lib/routes";
 import { authErrorText, getSupabase, isCloudConfigured, pingCloud } from "@/lib/supabase";
 import { errorText } from "@/lib/useTrip";
 import { Sheet } from "./Sheet";
+import { DriveSection } from "./DriveSection";
 
 type Stage = "signin" | "signup" | "link" | "reset" | "newPassword";
 
@@ -180,6 +181,7 @@ export function AccountSheet({
                 </button>
               </div>
             )}
+            <DriveSection />
             <div className="editorActions">
               <button className="softBtn" onClick={signOut} disabled={busy}>
                 Выйти

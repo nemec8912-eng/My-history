@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { RegisterSW } from "@/components/RegisterSW";
+import { DriveBanner } from "@/components/DriveSection";
 
 export const metadata: Metadata = {
   title: "Моя история",
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <RegisterSW />
+        <DriveBanner />
       </body>
     </html>
   );

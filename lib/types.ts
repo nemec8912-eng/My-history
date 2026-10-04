@@ -146,4 +146,6 @@ export type MediaItem = {
   width?: number;
   height?: number;
   createdAt: string;
+  /** Оригинал хранится на Google Диске (только локальная пометка). */
+  drive?: boolean;
 };

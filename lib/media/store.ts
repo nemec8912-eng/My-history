@@ -10,12 +10,14 @@ import { newId } from "../markerStyle";
 import { getSupabase, getUserId, MEDIA_BUCKET } from "../supabase";
 import type { MediaId, MediaItem, MediaKind } from "../types";
 import { idb, STORES } from "./idb";
+import { downloadFromDrive, getDriveToken, isDriveEnabled, onDriveChange, uploadToDrive } from "./gdrive";
 
 export type Variant = "original" | "thumb";
 
 const MAX_SIDE = 2560;
 const THUMB_SIDE = 480;
 const PENDING_KEY = "pending-uploads";
+const PENDING_DRIVE = "pending-drive";
 
 const urlCache = new Map<string, string>();
 const inflight = new Map<string, Promise<string | null>>();
@@ -80,6 +82,76 @@ export async function queueUpload(ids: MediaId[]) {
   await setPending([...(await getPending()), ...ids]);
 }
 
+async function getPendingDrive(): Promise<MediaId[]> {
+  return (await idb.get<MediaId[]>(STORES.kv, PENDING_DRIVE).catch(() => undefined)) ?? [];
+}
+async function setPendingDrive(ids: MediaId[]) {
+  await idb.set(STORES.kv, PENDING_DRIVE, Array.from(new Set(ids))).catch(() => undefined);
+}
+
+/** Сколько оригиналов ждут загрузки на Google Диск. */
+export async function pendingDriveCount(): Promise<number> {
+  return (await getPendingDrive()).length;
+}
+
+const syncListeners = new Set<() => void>();
+export function onSyncChange(fn: () => void): () => void {
+  syncListeners.add(fn);
+  return () => syncListeners.delete(fn);
+}
+const emitSync = () => syncListeners.forEach((fn) => fn());
+
+/** Загружает оригиналы на Google Диск и записывает, где они лежат (media_storage). */
+async function syncDrive(userId: string) {
+  if (!getDriveToken()) return;
+  const sb = getSupabase();
+  if (!sb) return;
+  const pending = await getPendingDrive();
+  const left: MediaId[] = [];
+  for (const id of pending) {
+    try {
+      const raw = await idb.get<Blob>(STORES.blobs, `${id}:raw`);
+      const meta = await idb.get<MediaItem>(STORES.meta, id);
+      if (!raw || !meta) continue;
+      const ext = (meta.name?.split(".").pop() || meta.mime.split("/")[1] || "bin").slice(0, 5);
+      const stamp = meta.createdAt.slice(0, 19).replace(/[T:]/g, "-");
+      const { fileId, size } = await uploadToDrive(raw, `${stamp}_${id.slice(0, 8)}.${ext}`, raw.type || meta.mime, { mediaId: id });
+      const { error } = await sb.from("media_storage").upsert(
+        {
+          media_id: id,
+          variant: "original",
+          owner_id: userId,
+          provider: "gdrive",
+          location: { fileId },
+          size,
+          status: "ok",
+        },
+        { onConflict: "media_id,variant,provider" }
+      );
+      if (error) throw error;
+      // Освобождаем место на телефоне: фото остаются в виде облегчённой копии, большие файлы — на Диске.
+      if (meta.kind === "image" || raw.size > 20 * 1024 * 1024) await idb.del(STORES.blobs, `${id}:raw`).catch(() => undefined);
+      emitSync();
+    } catch (e) {
+      if (e instanceof Error && e.message === "NO_TOKEN") {
+        left.push(id);
+        continue;
+      }
+      console.warn("Не удалось загрузить на Google Диск", id, e);
+      left.push(id);
+    }
+  }
+  const now = await getPendingDrive();
+  await setPendingDrive([...left, ...now.filter((id) => !pending.includes(id))]);
+  emitSync();
+}
+
+if (typeof window !== "undefined") {
+  onDriveChange(() => {
+    if (getDriveToken()) void syncPendingUploads();
+  });
+}
+
 async function uploadOne(id: MediaId, userId: string): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
@@ -98,7 +170,9 @@ async function uploadOne(id: MediaId, userId: string): Promise<boolean> {
   });
   if (metaError) throw metaError;
 
-  for (const variant of ["original", "thumb"] as Variant[]) {
+  // Если оригинал уходит на Google Диск, в Supabase кладём только превью.
+  const variants: Variant[] = meta.drive ? ["thumb"] : ["original", "thumb"];
+  for (const variant of variants) {
     const blob = await idb.get<Blob>(STORES.blobs, `${id}:${variant}`);
     if (!blob) continue;
     const path = `${userId}/${id}/${variant}`;
@@ -145,6 +219,7 @@ export function syncPendingUploads(): Promise<void> {
     // Учитываем файлы, добавленные во время синхронизации.
     const now = await getPending();
     await setPending([...left, ...now.filter((id) => !pending.includes(id))]);
+    await syncDrive(userId).catch((e) => console.warn("Google Диск", e));
   })().finally(() => {
     syncing = null;
   });
@@ -160,14 +235,23 @@ async function downloadFromCloud(id: MediaId, variant: Variant): Promise<Blob | 
     .eq("media_id", id)
     .eq("status", "ok");
   if (!rows?.length) return null;
-  const row = rows.find((r) => r.variant === variant) ?? rows.find((r) => r.variant === "original") ?? rows[0];
+  const row =
+    rows.find((r) => r.variant === variant && r.provider === "supabase") ??
+    rows.find((r) => r.variant === variant) ??
+    rows.find((r) => r.variant === "original") ??
+    rows[0];
+  if (row.provider === "gdrive") {
+    const loc = row.location as { fileId: string };
+    const blob = await downloadFromDrive(loc.fileId);
+    if (blob && blob.size < 8 * 1024 * 1024) await idb.set(STORES.blobs, `${id}:original`, blob).catch(() => undefined);
+    return blob;
+  }
   if (row.provider === "supabase") {
     const loc = row.location as { bucket: string; path: string };
     const { data } = await sb.storage.from(loc.bucket).download(loc.path);
     if (data) await idb.set(STORES.blobs, `${id}:${row.variant}`, data).catch(() => undefined);
     return data ?? null;
   }
-  // Здесь появится провайдер "gdrive": location = { accountId, fileId }.
   return null;
 }
 
@@ -213,7 +297,14 @@ export async function addMedia(file: File): Promise<MediaItem> {
     }
   }
 
-  await idb.set(STORES.blobs, `${id}:original`, original);
+  const drive = isDriveEnabled();
+  if (drive) {
+    // Оригинал без сжатия — на Google Диск; на телефоне остаётся облегчённая копия фото.
+    await idb.set(STORES.blobs, `${id}:raw`, file);
+    if (kind === "image") await idb.set(STORES.blobs, `${id}:original`, original);
+  } else {
+    await idb.set(STORES.blobs, `${id}:original`, original);
+  }
   if (thumb) await idb.set(STORES.blobs, `${id}:thumb`, thumb);
 
   const meta: MediaItem = {
@@ -225,9 +316,12 @@ export async function addMedia(file: File): Promise<MediaItem> {
     width,
     height,
     createdAt: new Date().toISOString(),
+    ...(drive ? { drive: true } : {}),
   };
   await idb.set(STORES.meta, id, meta);
   await queueUpload([id]);
+  if (drive) await setPendingDrive([...(await getPendingDrive()), id]);
+  emitSync();
   void syncPendingUploads();
   return meta;
 }
@@ -262,9 +356,14 @@ export function getMediaUrl(id: MediaId, variant: Variant = "thumb"): Promise<st
   const p = (async () => {
     let blob =
       (await idb.get<Blob>(STORES.blobs, key).catch(() => undefined)) ??
+      (variant === "original" ? await idb.get<Blob>(STORES.blobs, `${id}:raw`).catch(() => undefined) : undefined) ??
       (variant === "thumb" ? await idb.get<Blob>(STORES.blobs, `${id}:original`).catch(() => undefined) : undefined) ??
       null;
     if (!blob) blob = await downloadFromCloud(id, variant).catch(() => null);
+    if (!blob && variant === "original") {
+      // Оригинал недоступен (например, Google Диск не подключён на этом устройстве) — показываем превью.
+      return getMediaUrl(id, "thumb");
+    }
     if (!blob) return null;
     const url = URL.createObjectURL(blob);
     urlCache.set(key, url);
