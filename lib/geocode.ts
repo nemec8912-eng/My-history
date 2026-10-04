@@ -8,24 +8,31 @@ const BASE = "https://nominatim.openstreetmap.org";
 
 function shortName(a: Record<string, string> | undefined, fallback: string): string {
   if (!a) return fallback.split(",")[0];
-  return a.attraction || a.tourism || a.amenity || a.leisure || a.railway || a.station || a.road || a.village || a.town || a.city || fallback.split(",")[0];
+  return a.attraction || a.park || a.station || a.tourism || a.amenity || a.leisure || a.railway || a.station || a.road || a.village || a.town || a.city || fallback.split(",")[0];
 }
 
-function region(a: Record<string, string> | undefined): string {
+function region(a: Record<string, string> | undefined, short: string): string {
   if (!a) return "";
-  return [a.city || a.town || a.village, a.state || a.region].filter(Boolean).join(", ");
+  const parts = [a.city || a.town || a.village || a.municipality, a.state || a.region].filter(Boolean) as string[];
+  // Без повторов: «Москва, Москва» → «Москва»; само название места в регион не попадает.
+  return Array.from(new Set(parts)).filter((p) => p !== short).join(", ");
+}
+
+function build(name: string | undefined, a: Record<string, string> | undefined, display: string) {
+  const short = (name && name.trim()) || shortName(a, display);
+  const r = region(a, short);
+  return { short, label: r ? `${short}, ${r}` : short };
 }
 
 export async function searchPlaces(q: string, signal?: AbortSignal): Promise<PlaceHit[]> {
   const params = new URLSearchParams({ q, format: "jsonv2", addressdetails: "1", limit: "7", "accept-language": "ru", countrycodes: "ru" });
   const res = await fetch(`${BASE}/search?${params}`, { signal });
   if (!res.ok) throw new Error("Поиск мест недоступен");
-  const list = (await res.json()) as { display_name: string; lat: string; lon: string; address?: Record<string, string> }[];
-  return list.map((p) => {
-    const short = shortName(p.address, p.display_name);
-    const r = region(p.address);
-    return { short, label: r && !short.includes(r) ? `${short}, ${r}` : short, lat: Number(p.lat), lon: Number(p.lon) };
-  });
+  const list = (await res.json()) as { name?: string; display_name: string; lat: string; lon: string; address?: Record<string, string> }[];
+  const seen = new Set<string>();
+  return list
+    .map((p) => ({ ...build(p.name, p.address, p.display_name), lat: Number(p.lat), lon: Number(p.lon) }))
+    .filter((h) => (seen.has(h.label) ? false : (seen.add(h.label), true)));
 }
 
 export async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
@@ -33,11 +40,9 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string |
     const params = new URLSearchParams({ lat: String(lat), lon: String(lon), format: "jsonv2", addressdetails: "1", "accept-language": "ru", zoom: "16" });
     const res = await fetch(`${BASE}/reverse?${params}`);
     if (!res.ok) return null;
-    const p = (await res.json()) as { display_name?: string; address?: Record<string, string> };
+    const p = (await res.json()) as { name?: string; display_name?: string; address?: Record<string, string> };
     if (!p.display_name) return null;
-    const short = shortName(p.address, p.display_name);
-    const r = region(p.address);
-    return r && !short.includes(r) ? `${short}, ${r}` : short;
+    return build(p.name, p.address, p.display_name).label;
   } catch {
     return null;
   }

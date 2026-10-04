@@ -22,6 +22,7 @@ function MapScreen() {
   const onlyTrip = useSearchParams().get("trip");
   const [year, setYear] = useState<string>("all");
   const [sel, setSel] = useState<string | null>(null);
+  const [base, setBase] = useState<"map" | "satellite">("map");
 
   const years = useMemo(() => Array.from(new Set((trips ?? []).map((t) => t.date.slice(0, 4)))).sort().reverse(), [trips]);
   const shown = useMemo(
@@ -68,12 +69,12 @@ function MapScreen() {
             <Icon name="back" />
           </Link>
           <h1>{tripTitle ?? "Карта"}</h1>
-          <span className="roundBtn ghostBtn" aria-hidden>
+          <button className={`roundBtn ${base === "satellite" ? "accent" : ""}`} aria-label="Спутник или схема" onClick={() => setBase(base === "map" ? "satellite" : "map")}>
             <Icon name="layers" />
-          </span>
+          </button>
         </header>
 
-        {trips && <LeafletMap points={points} lines={lines} onSelect={setSel} />}
+        {trips && <LeafletMap points={points} lines={lines} onSelect={setSel} base={base} />}
 
         {trips && points.length === 0 && (
           <div className="mapEmpty">

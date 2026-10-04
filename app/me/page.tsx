@@ -12,6 +12,8 @@ export default function MePage() {
   const [user, setUser] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const drive = useDriveState();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     getUserId().then(setUser);
   }, [tick]);
@@ -41,8 +43,8 @@ export default function MePage() {
         <h1>Я</h1>
         <span className="ahSide right" />
       </header>
-      <div className="settingsList">
-        {rows.map((r) => (
+      <div className="settingsList" style={{ visibility: mounted ? "visible" : "hidden" }}>
+        {(mounted ? rows : []).map((r) => (
           <div key={r.label} className="settingsRow">
             <Icon name={r.icon} size={20} />
             <span>{r.label}</span>

@@ -21,6 +21,30 @@ function iconHtml(p: MapPoint, url?: string | null) {
   return `<div class="lmPin" style="--c:${safeColor(p.color)};width:${size}px;height:${size}px">${inner}</div>`;
 }
 
+/** Подложки без ключей: OpenStreetMap (затемняется стилями) и спутник Esri с подписями. */
+function addBase(L: L, map: L, base: "map" | "satellite"): L[] {
+  if (base === "satellite") {
+    return [
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        className: "tilesSat",
+        attribution: "Tiles &copy; Esri",
+      }).addTo(map),
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        className: "tilesLabels",
+      }).addTo(map),
+    ];
+  }
+  return [
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      className: "tilesDark",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map),
+  ];
+}
+
 export function LeafletMap({
   points,
   lines = [],
@@ -28,6 +52,7 @@ export function LeafletMap({
   labels = true,
   interactive = true,
   className,
+  base = "map",
 }: {
   points: MapPoint[];
   lines?: MapLine[];
@@ -35,9 +60,11 @@ export function LeafletMap({
   labels?: boolean;
   interactive?: boolean;
   className?: string;
+  base?: "map" | "satellite";
 }) {
   const el = useRef<HTMLDivElement>(null);
-  const api = useRef<{ L: L; map: L; layer: L } | null>(null);
+  const api = useRef<{ L: L; map: L; layer: L; tiles: L[] } | null>(null);
+  const baseRef = useRef(base);
   const onSel = useRef(onSelect);
   onSel.current = onSelect;
   const key = JSON.stringify([points.map((p) => [p.id, p.lat, p.lon, p.photoId, p.color, p.label]), lines.map((l) => [l.id, l.coords.length, l.color])]);
@@ -58,13 +85,9 @@ export function LeafletMap({
         boxZoom: false,
         keyboard: false,
       }).setView([55.75, 37.62], 5);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-        subdomains: "abcd",
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      }).addTo(map);
+      const tiles = addBase(L, map, baseRef.current);
       const layer = L.layerGroup().addTo(map);
-      api.current = { L, map, layer };
+      api.current = { L, map, layer, tiles };
       draw();
     });
     return () => {
@@ -105,6 +128,14 @@ export function LeafletMap({
     if (bounds.length === 1) map.setView(bounds[0], 13);
     else if (bounds.length > 1) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }
+
+  useEffect(() => {
+    baseRef.current = base;
+    const a = api.current;
+    if (!a) return;
+    a.tiles.forEach((t: L) => t.remove());
+    a.tiles = addBase(a.L, a.map, base);
+  }, [base]);
 
   useEffect(() => {
     draw();

@@ -51,6 +51,11 @@ export function AccountPanel({
     localTripCount().then(setLocal);
   }, [sb]);
 
+  // Содержимое зависит от браузера (сессия, localStorage) — показываем только после загрузки на устройстве.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
   if (!sb || !isCloudConfigured()) {
     return (
       <>
