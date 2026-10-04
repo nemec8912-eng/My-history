@@ -78,7 +78,6 @@ async function run(name, browserType, device) {
     await page.waitForTimeout(3500);
     await shot("9-home-with-trip");
     await shot("9b-home-full", true);
-    await page.goto(BASE + "/trip/?id=" + new URL(page.url()).searchParams.get("id"), { waitUntil: "networkidle" }).catch(() => {});
     log.push(`[${name}] OK url=${page.url()} overflowX=${await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)}`);
   } catch (e) {
     log.push(`[${name}] FAILED: ${e.message}`);
