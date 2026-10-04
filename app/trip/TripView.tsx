@@ -168,6 +168,21 @@ export function TripView() {
   const end = cps.find((c) => c.kind === "end");
 
   const saveCp = (cp: Checkpoint) => update({ ...trip, checkpoints: cps.map((c) => (c.id === cp.id ? cp : c)) });
+  const setEndpoint = (cid: string, kind: "start" | "end") => {
+    const selected = cps.find((c) => c.id === cid);
+    if (!selected) return;
+    const normalized = cps.map((c) => ({
+      ...c,
+      kind: c.id === cid ? kind : c.kind === kind ? "regular" as const : c.kind,
+    }));
+    const picked = normalized.find((c) => c.id === cid)!;
+    const rest = normalized.filter((c) => c.id !== cid);
+    const next = kind === "start"
+      ? [{ ...picked, arrivedBy: undefined }, ...rest]
+      : [...rest, picked];
+    update({ ...trip, checkpoints: next });
+    setOpenId(cid);
+  };
   const deleteCp = (cid: string) => {
     update({ ...trip, checkpoints: cps.filter((c) => c.id !== cid) });
     setOpenId(null);
@@ -348,6 +363,8 @@ export function TripView() {
           }}
           onDelete={deleteCp}
           onMove={moveCp}
+          onSetStart={(cid) => setEndpoint(cid, "start")}
+          onSetEnd={(cid) => setEndpoint(cid, "end")}
           onOpenPlace={(cid) => router.push(routes.place(trip.id, cid))}
           onNavigate={(i) => {
             const next = cps[i];
