@@ -109,7 +109,7 @@ export function LeafletMap({
     layer.clearLayers();
     for (const ar of areas) {
       try {
-        L.geoJSON(ar.geojson, { style: { color: ar.color, weight: 1.5, opacity: 0.9, fillColor: ar.color, fillOpacity: 0.28 }, interactive: false }).addTo(layer);
+        L.geoJSON(ar.geojson, { style: { color: ar.color, weight: 1.5, opacity: 0.9, fillColor: ar.color, fillOpacity: 0.4 }, interactive: false }).addTo(layer);
       } catch {
         /* повреждённая геометрия — просто не рисуем */
       }

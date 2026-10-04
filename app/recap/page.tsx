@@ -23,8 +23,32 @@ const nice = (d: string) => {
 
 type Slide =
   | { kind: "title"; dur: number; img?: HTMLImageElement }
-  | { kind: "photo"; dur: number; img: HTMLImageElement; title: string; sub: string }
+  | { kind: "photo"; dur: number; img: HTMLImageElement | HTMLVideoElement; title: string; sub: string; video?: boolean }
   | { kind: "end"; dur: number; img?: HTMLImageElement };
+
+/** Видео для ролика: берём до 6 секунд из начала (без звука). */
+async function loadVideo(id: string): Promise<{ el: HTMLVideoElement; dur: number } | null> {
+  const url = await getMediaUrl(id, "original").catch(() => null);
+  if (!url) return null;
+  const v = document.createElement("video");
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = "auto";
+  v.src = url;
+  const ok = await new Promise<boolean>((res) => {
+    const t = setTimeout(() => res(false), 8000);
+    v.onloadeddata = () => {
+      clearTimeout(t);
+      res(true);
+    };
+    v.onerror = () => {
+      clearTimeout(t);
+      res(false);
+    };
+  });
+  if (!ok || !v.videoWidth) return null;
+  return { el: v, dur: Math.max(2, Math.min(6, Number.isFinite(v.duration) ? v.duration : 4)) };
+}
 
 async function loadImage(id: string): Promise<HTMLImageElement | null> {
   const meta = await getMediaMeta(id).catch(() => null);
@@ -53,18 +77,28 @@ async function buildSlides(trip: Trip, onProgress: (n: number, total: number) =>
   let n = 0;
   for (const it of picked) {
     onProgress(++n, picked.length);
+    const meta = await getMediaMeta(it.id).catch(() => null);
+    if (meta?.kind === "audio") continue;
+    if (meta?.kind === "video") {
+      const v = await loadVideo(it.id);
+      if (v) slides.push({ kind: "photo", dur: v.dur, img: v.el, title: it.title, sub: it.sub, video: true });
+      continue;
+    }
     const img = await loadImage(it.id);
     if (img) slides.push({ kind: "photo", dur: 2.8, img, title: it.title, sub: it.sub });
   }
-  const firstImg = slides.find((s) => s.kind === "photo")?.img;
-  const lastImg = [...slides].reverse().find((s) => s.kind === "photo")?.img;
+  const stills = slides.filter((s): s is Extract<Slide, { kind: "photo" }> => s.kind === "photo" && !s.video).map((s) => s.img as HTMLImageElement);
+  const firstImg = stills[0];
+  const lastImg = stills[stills.length - 1];
   return [{ kind: "title", dur: 3, img: firstImg }, ...slides, { kind: "end", dur: 3.2, img: lastImg }];
 }
 
-function cover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, zoom: number, panX: number, panY: number) {
-  const k = Math.max(W / img.naturalWidth, H / img.naturalHeight) * zoom;
-  const w = img.naturalWidth * k;
-  const h = img.naturalHeight * k;
+function cover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, zoom: number, panX: number, panY: number) {
+  const iw = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const ih = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
+  const k = Math.max(W / iw, H / ih) * zoom;
+  const w = iw * k;
+  const h = ih * k;
   ctx.drawImage(img, (W - w) / 2 + panX, (H - h) / 2 + panY, w, h);
 }
 
@@ -89,7 +123,13 @@ function drawSlide(ctx: CanvasRenderingContext2D, s: Slide, local: number, index
   const p = Math.min(1, local / s.dur);
   ctx.fillStyle = "#0a0d14";
   ctx.fillRect(0, 0, W, H);
-  if (s.img) {
+  if (s.kind === "photo" && s.video) {
+    const v = s.img as HTMLVideoElement;
+    // Держим кадр видео в такт ролику.
+    if (Math.abs(v.currentTime - local) > 0.35) v.currentTime = Math.min(local, (v.duration || local) - 0.05);
+    if (v.paused && local > 0.05 && local < s.dur) void v.play().catch(() => undefined);
+    cover(ctx, v, 1, 0, 0);
+  } else if (s.img) {
     const dir = index % 2 ? 1 : -1;
     cover(ctx, s.img, 1.04 + 0.1 * p, dir * 30 * (p - 0.5), -dir * 20 * (p - 0.5));
   }
@@ -156,6 +196,7 @@ function Recap() {
 
   const total = useMemo(() => (slides ?? []).reduce((s, x) => s + x.dur, 0), [slides]);
   const photos = (slides ?? []).filter((s) => s.kind === "photo").length;
+  const pauseVideos = () => (slides ?? []).forEach((s) => s.kind === "photo" && s.video && (s.img as HTMLVideoElement).pause());
 
   useEffect(() => {
     if (!trip) return;
@@ -202,6 +243,7 @@ function Recap() {
     frame(Math.min(t, total));
     setProgress(Math.min(1, t / total));
     if (t >= total) {
+      pauseVideos();
       setPlaying(false);
       offset.current = 0;
       onEnd?.();
@@ -214,6 +256,7 @@ function Recap() {
     if (playing) {
       cancelAnimationFrame(raf.current);
       offset.current += (performance.now() - startAt.current) / 1000;
+      pauseVideos();
       setPlaying(false);
       return;
     }
@@ -268,7 +311,7 @@ function Recap() {
           <i style={{ width: `${progress * 100}%` }} />
         </span>
       </div>
-      {slides && photos === 0 && <p className="muted">В этой поездке пока нет фото для видео.</p>}
+      {slides && photos === 0 && <p className="muted">В этой поездке пока нет фото или видео для ролика.</p>}
       {slides && photos > 0 && (
         <div className="recapActions">
           <button className="softBtn" onClick={play} disabled={recording}>
@@ -280,7 +323,7 @@ function Recap() {
         </div>
       )}
       <p className="hint">
-        {photos} фото · {Math.round(total)} сек. Видео собирается прямо на телефоне — это занимает столько же времени, сколько длится ролик.
+        {photos} фото и видео · {Math.round(total)} сек. Видео собирается прямо на телефоне — это занимает столько же времени, сколько длится ролик.
       </p>
     </main>
   );

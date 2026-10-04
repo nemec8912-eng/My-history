@@ -12,6 +12,8 @@ const GPX = `<?xml version="1.0"?><gpx version="1.1" creator="test"><trk><trkseg
 ${Array.from({ length: 60 }, (_, i) => `<trkpt lat="${(55.75 + i * 0.002).toFixed(5)}" lon="${(37.6 + Math.sin(i / 5) * 0.004 + i * 0.001).toFixed(5)}"><time>2026-06-01T10:${String(i).padStart(2, "0")}:00Z</time></trkpt>`).join("\n")}
 </trkseg></trk></gpx>`;
 
+const routesRecap = (id) => `/recap/?trip=${encodeURIComponent(id)}`;
+
 async function run(name, browserType, device) {
   const browser = await browserType.launch();
   const ctx = await browser.newContext({
@@ -153,6 +155,100 @@ async function run(name, browserType, device) {
     }
 
     /* ── Быстрый момент ── */
+    /* ── Видео в ролике (Chromium умеет записать тестовое видео) ── */
+    if (name === "desktop") {
+      step = "recap-video";
+      const webm = await page.evaluate(async () => {
+        const c = document.createElement("canvas");
+        c.width = 320;
+        c.height = 240;
+        const x = c.getContext("2d");
+        const rec = new MediaRecorder(c.captureStream(20), { mimeType: "video/webm" });
+        const chunks = [];
+        rec.ondataavailable = (e) => chunks.push(e.data);
+        rec.start(200);
+        for (let i = 0; i < 30; i++) {
+          x.fillStyle = `hsl(${i * 12},70%,50%)`;
+          x.fillRect(0, 0, 320, 240);
+          await new Promise((r) => setTimeout(r, 70));
+        }
+        rec.stop();
+        await new Promise((r) => (rec.onstop = r));
+        const b = await new Blob(chunks, { type: "video/webm" }).arrayBuffer();
+        return btoa(String.fromCharCode(...new Uint8Array(b)));
+      });
+      await page.goto(BASE + `/moment/?trip=${tripId}&cp=${cafe.id}`, { waitUntil: "load" });
+      await page.waitForTimeout(1000);
+      await page.locator('.momentBody .mediaPicker input[accept="video/*"]').setInputFiles({ name: "clip.webm", mimeType: "video/webm", buffer: Buffer.from(webm, "base64") });
+      await page.waitForTimeout(4000);
+      await page.goto(BASE + routesRecap(tripId), { waitUntil: "load" });
+      await page.waitForSelector(".recapActions", { timeout: 30000 });
+      const hint = await page.locator(".recapPage .hint").textContent();
+      ok(name, /^2 фото и видео/.test(hint?.trim() ?? ""), `recap includes video clip: "${hint?.trim().slice(0, 40)}"`);
+
+      /* ── Очистка неиспользуемых файлов ── */
+      step = "orphans";
+      await page.goto(BASE + `/moment/?trip=${tripId}&cp=${cafe.id}`, { waitUntil: "load" });
+      await page.waitForTimeout(1500);
+      const cellsBefore = await page.locator(".momentBody .mediaGallery .mediaCell").count();
+      await page.locator(".momentBody .mediaGallery .mediaCell").first().click();
+      await page.waitForTimeout(600);
+      await page.locator(".lightbox").getByRole("button", { name: "Удалить" }).click();
+      await page.waitForTimeout(1200);
+      await page.locator(".lightboxClose").click().catch(() => {});
+      const removedIds = await page.evaluate(
+        () =>
+          new Promise((res) => {
+            const r = indexedDB.open("my-history");
+            r.onsuccess = () => {
+              const db = r.result;
+              const g = db.transaction("kv").objectStore("kv").get("trips");
+              g.onsuccess = () => {
+                const used = new Set(g.result.flatMap((t) => [...t.mediaIds, ...t.checkpoints.flatMap((c) => [...c.mediaIds, c.coverMediaId].filter(Boolean))]));
+                const k = db.transaction("media").objectStore("media").getAllKeys();
+                k.onsuccess = () => {
+                  const orphans = k.result.filter((id) => !used.has(id));
+                  // делаем вид, что файл убрали давно (свежие файлы очистка не трогает)
+                  const tx = db.transaction("media", "readwrite");
+                  const st = tx.objectStore("media");
+                  for (const id of orphans) {
+                    const q = st.get(id);
+                    q.onsuccess = () => st.put({ ...q.result, createdAt: "2020-01-01T00:00:00.000Z" }, id);
+                  }
+                  tx.oncomplete = () => res(orphans);
+                };
+              };
+            };
+          })
+      );
+      await page.goto(BASE + "/me/", { waitUntil: "load" });
+      await page.waitForTimeout(1200);
+      await page.locator(".settingsRow", { hasText: "Найти файлы" }).click();
+      await page.waitForSelector(".orphanBox", { timeout: 10000 });
+      const found = await page.locator(".orphanBox p").textContent();
+      await page.locator(".orphanBox .softBtn", { hasText: "Удалить их" }).click();
+      await page.waitForSelector(".meTools .okBar", { timeout: 10000 });
+      const delMsg = await page.locator(".meTools .okBar").textContent();
+      const left = await page.evaluate(
+        (ids) =>
+          new Promise((res) => {
+            const r = indexedDB.open("my-history");
+            r.onsuccess = () => {
+              const k = r.result.transaction("media").objectStore("media").getAllKeys();
+              k.onsuccess = () => res(ids.filter((id) => k.result.includes(id)).length);
+            };
+          }),
+        removedIds
+      );
+      all = await trips();
+      const stillUsed = all.find((t) => t.id === tripId).checkpoints.find((c) => c.id === cafe.id).mediaIds.length;
+      ok(
+        name,
+        cellsBefore === 2 && removedIds.length === 1 && /Найдено 1/.test(found ?? "") && /Удалено: 1/.test(delMsg ?? "") && left === 0 && stillUsed === 1,
+        `orphan cleanup: removed from moment ${cellsBefore}→${stillUsed}, found "${found?.trim()}", "${delMsg?.trim()}", left=${left}`
+      );
+    }
+
     step = "quick";
     if (browserType !== webkit) {
       await page.goto(BASE + "/new/?quick=1", { waitUntil: "load" });
