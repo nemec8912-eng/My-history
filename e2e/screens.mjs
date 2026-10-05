@@ -52,7 +52,24 @@ async function run(name, browserType, device) {
     await page.getByRole("tab", { name: "Моменты" }).click();
     await page.waitForTimeout(800);
     await shot("06-trip-moments");
-    await page.locator(".momentRow", { hasText: "Метро" }).first().click();
+    // Во вкладке «Моменты» — только сохранённые моменты; точки примера открываем со страницы момента напрямую.
+    if (await page.locator(".momentRow", { hasText: "Метро" }).count()) await page.locator(".momentRow", { hasText: "Метро" }).first().click();
+    else {
+      const ids = await page.evaluate(
+        () =>
+          new Promise((res) => {
+            const r = indexedDB.open("my-history");
+            r.onsuccess = () => {
+              const g = r.result.transaction("kv").objectStore("kv").get("trips");
+              g.onsuccess = () => {
+                const t = (g.result || []).find((x) => x.title.includes("пример"));
+                res([t.id, t.checkpoints.find((c) => c.title === "Метро").id]);
+              };
+            };
+          })
+      );
+      await page.goto(`${BASE}/moment/?trip=${ids[0]}&cp=${ids[1]}`, { waitUntil: "load" });
+    }
     await page.waitForURL(/\/moment\/\?/, { timeout: 15000 });
     await page.waitForTimeout(3000);
     await shot("07-moment");

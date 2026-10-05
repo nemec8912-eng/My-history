@@ -946,3 +946,6 @@ html.applocked body > *:not(.appLock) { visibility: hidden !important; }
 .tlText strong, .tripRowText strong, .mrText strong, .mcText strong, .momentRow strong { overflow-wrap: anywhere; }
 .nmHead { min-width: 0; }
 .mcLink { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; color: inherit; text-decoration: none; }
+/* Вкладки большой локации помещаются целиком: «Моменты» не обрезаются на узком экране */
+.placePage .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
+.placePage .tabs button { padding: 10px 4px; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

@@ -155,7 +155,7 @@ async function run(name, browserType, device) {
     await page.goto(BASE + "/albums/", { waitUntil: "load" });
     await page.waitForTimeout(1500);
     const albumTxt = await page.locator(".albumCard").first().textContent().catch(() => "");
-    ok(name, /Лучшее/.test(albumTxt) && /1 файлов/.test(albumTxt), `album created from viewer: "${albumTxt}"`);
+    ok(name, /Лучшее/.test(albumTxt) && /1 файл(?!ов|а)/.test(albumTxt), `album created from viewer: "${albumTxt}"`);
     await page.locator(".albumCard").first().click();
     await page.waitForURL(/\/album\//);
     await page.waitForTimeout(1200);
