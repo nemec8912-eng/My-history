@@ -79,3 +79,27 @@ export async function readZipEntry(file: Blob, e: ZipEntry, type = ""): Promise<
   const out = await new Response(stream).blob();
   return type ? new Blob([out], { type }) : out;
 }
+
+/** Начало файла из архива (например, чтобы прочитать EXIF), не распаковывая его целиком. */
+export async function readZipEntryHead(file: Blob, e: ZipEntry, maxBytes: number): Promise<Blob> {
+  const h = await bytes(file, e.offset, e.offset + 30);
+  if (h.getUint32(0, true) !== 0x04034b50) throw new Error("Повреждённый ZIP");
+  const start = e.offset + 30 + h.getUint16(26, true) + h.getUint16(28, true);
+  if (e.method === 0) return file.slice(start, start + Math.min(e.compSize, maxBytes));
+  if (e.method !== 8 || typeof DecompressionStream === "undefined") throw new Error("Нельзя прочитать начало файла");
+  const reader = file
+    .slice(start, start + e.compSize)
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate-raw"))
+    .getReader();
+  const parts: Uint8Array[] = [];
+  let got = 0;
+  while (got < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done || !value) break;
+    parts.push(value);
+    got += value.length;
+  }
+  await reader.cancel().catch(() => undefined);
+  return new Blob(parts as BlobPart[]);
+}

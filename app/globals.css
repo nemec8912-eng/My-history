@@ -930,3 +930,6 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .tlFilters > .tagChip { flex: none; margin-top: 2px; }
 .tlFilters .tagFilter { flex: 1; min-width: 0; }
 .offlineBar.failed { pointer-events: auto; color: #ffd0d4; background: rgba(60,14,20,.96); border-color: rgba(255,90,100,.55); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+html.applocked body > *:not(.appLock) { visibility: hidden !important; }
+.savePrompt { position: fixed; z-index: 9000; left: 12px; right: 12px; bottom: calc(90px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-radius: 18px; background: #161c28; border: 1px solid rgba(47,123,255,.5); box-shadow: 0 16px 40px rgba(0,0,0,.55); max-width: 520px; margin: 0 auto; }
+.savePrompt span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }

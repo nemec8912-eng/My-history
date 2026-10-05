@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { readTakeoutFiles, readTakeoutZip, type TakeoutItem } from "@/lib/takeout";
+import { readTakeoutFiles, readTakeoutZips, type TakeoutItem } from "@/lib/takeout";
+import { mp4CreationDate } from "@/lib/mp4date";
 import { Icon } from "@/components/Icon";
 import { readPhotoInfo, localIso } from "@/lib/exif";
 import { plural } from "@/lib/format";
@@ -78,6 +79,7 @@ export default function ImportPage() {
   const [tripTitle, setTripTitle] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const savedMedia = useRef(new Map<string, string>());
 
   const [year, setYear] = useState("all");
   const [skipped, setSkipped] = useState(0);
@@ -109,7 +111,12 @@ export default function ImportPage() {
     const out: ImportFile[] = [];
     for (const file of list) {
       const kind = file.type.startsWith("video/") ? "video" : "image";
-      const info = kind === "image" ? await readPhotoInfo(file) : { takenAt: file.lastModified ? localIso(new Date(file.lastModified)) : undefined, fromExif: false, gps: undefined };
+      // Видео: дата из самого файла (у выбранных на iPhone файлов «дата изменения» — момент выбора).
+      const videoDate = kind === "video" ? await mp4CreationDate(file) : undefined;
+      const info =
+        kind === "image"
+          ? await readPhotoInfo(file)
+          : { takenAt: videoDate ?? (file.lastModified ? localIso(new Date(file.lastModified)) : undefined), fromExif: Boolean(videoDate), gps: undefined };
       out.push({ key: newId(), file, kind, takenAt: info.takenAt ?? localIso(new Date()), fromExif: info.fromExif, gps: info.gps });
     }
     setFiles((f) => [...f, ...out]);
@@ -127,7 +134,7 @@ export default function ImportPage() {
       const zips = list.filter((f) => /\.zip$/i.test(f.name));
       const rest = list.filter((f) => !/\.zip$/i.test(f.name));
       const items: TakeoutItem[] = [];
-      for (const z of zips) items.push(...(await readTakeoutZip(z, setProgress)));
+      if (zips.length) items.push(...(await readTakeoutZips(zips, setProgress)));
       if (rest.length) items.push(...(await readTakeoutFiles(rest, setProgress)));
       const dated = items.filter((i) => i.takenAt);
       setSkipped((n) => n + items.length - dated.length);
@@ -149,10 +156,10 @@ export default function ImportPage() {
     setFiles((f) => f.filter((x) => !keys.has(x.key)));
   }
 
-  const clusterTitle = (c: ImportCluster) => places[c.key]?.place || (c.center ? "Место по GPS" : "Фото");
+  const clusterTitle = (c: ImportCluster, pl = places) => pl[c.key]?.place || (c.center ? "Место по GPS" : "Фото");
   /** Подпись места: «Казанский кремль, Казань, Татарстан» — без улицы (она уходит в адрес). */
-  const placeLabel = (c: ImportCluster) => {
-    const i = places[c.key];
+  const placeLabel = (c: ImportCluster, pl = places) => {
+    const i = pl[c.key];
     if (!i) return undefined;
     return Array.from(new Set([i.place, i.city, i.state].filter(Boolean))).join(", ");
   };
@@ -162,30 +169,33 @@ export default function ImportPage() {
     if (!shown.length) return;
     try {
       const repo = await getRepo();
-      const ids = new Map<string, string>();
+      // Уже сохранённые при прошлой (прерванной) попытке файлы второй раз не добавляем.
+      const ids = savedMedia.current;
       let n = 0;
       // Файлы сохраняются через обычный механизм: на устройство, затем в облако / на Google Диск.
       for (const f of shown) {
         setProgress(`Сохраняю ${++n} из ${shown.length}…`);
+        if (ids.has(f.key)) continue;
         const file = f.file ?? (await f.load!());
         ids.set(f.key, (await addMedia(file)).id);
       }
       // Названия мест для всех моментов (для больших архивов — по одному в секунду).
-      const need = clusters.filter((c) => c.center && !(c.key in places));
+      const pl = { ...places };
+      const need = clusters.filter((c) => c.center && !(c.key in pl));
       let k = 0;
       for (const c of need) {
         setProgress(`Определяю места: ${++k} из ${need.length}…`);
-        places[c.key] = await reverseInfo(c.center!.lat, c.center!.lon, 16).catch(() => null);
+        pl[c.key] = await reverseInfo(c.center!.lat, c.center!.lon, 16).catch(() => null);
       }
       setProgress("Раскладываю по моментам…");
       const toCheckpoint = (c: ImportCluster): Checkpoint => {
         const mediaIds = c.files.map((f) => ids.get(f.key)!).filter(Boolean);
-        const info = places[c.key];
+        const info = pl[c.key];
         const firstImage = c.files.find((f) => f.kind === "image");
         return createCheckpoint("regular", {
-          title: clusterTitle(c),
+          title: clusterTitle(c, pl),
           time: c.from,
-          location: c.center ? { ...c.center, label: placeLabel(c) } : undefined,
+          location: c.center ? { ...c.center, label: placeLabel(c, pl) } : undefined,
           mediaIds,
           coverMediaId: firstImage ? ids.get(firstImage.key) : mediaIds[0],
           meta: { date: c.date, type: c.files.every((f) => f.kind === "video") ? "video" : "photo", ...(info?.label ? { address: info.label } : {}) },
@@ -208,6 +218,9 @@ export default function ImportPage() {
           });
           await repo.save(t);
           firstId ||= t.id;
+          // День сохранён — убираем его из списка, чтобы повтор после ошибки не создал дубль.
+          const done = new Set(d.clusters.flatMap((c) => c.files.map((f) => f.key)));
+          setFiles((cur) => cur.filter((f) => !done.has(f.key)));
         }
         openId = firstId;
       } else if (target === "trip") {

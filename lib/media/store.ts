@@ -11,6 +11,7 @@ import { getSupabase, getUserId, MEDIA_BUCKET } from "../supabase";
 import type { MediaId, MediaItem, MediaKind } from "../types";
 import { idb, STORES } from "./idb";
 import { readPhotoInfo } from "../exif";
+import { mp4CreationDate } from "../mp4date";
 import { downloadFromDrive, getDriveToken, isDriveEnabled, onDriveChange, uploadToDrive } from "./gdrive";
 
 export type Variant = "original" | "thumb";
@@ -411,7 +412,12 @@ export async function addMedia(file: File): Promise<MediaItem> {
   }
 
   // Дата и место съёмки из EXIF — до сжатия, иначе они теряются.
-  const shot = kind === "image" ? await readPhotoInfo(file).catch(() => null) : null;
+  const shot =
+    kind === "image"
+      ? await readPhotoInfo(file).catch(() => null)
+      : kind === "video"
+        ? await mp4CreationDate(file).then((d) => (d ? { takenAt: d, fromExif: true, gps: undefined } : null))
+        : null;
 
   const drive = isDriveEnabled();
   if (drive) {

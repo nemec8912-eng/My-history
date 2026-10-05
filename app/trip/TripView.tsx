@@ -66,7 +66,7 @@ function TripStatTiles({ trip }: { trip: Trip }) {
 /** Действия с поездкой: видео-итог, поделиться, трек GPX. */
 function TripActions({ trip, onTrack }: { trip: Trip; onTrack: (r: Trip["route"]) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const hasPhotos = trip.checkpoints.some((c) => c.coverMediaId || c.mediaIds.length);
+  const hasPhotos = tripMediaIds(trip).length > 0;
   async function share() {
     setBusy("share");
     try {

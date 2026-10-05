@@ -203,7 +203,7 @@ async function run(name, browserType, device) {
       await page.goto(BASE + routesRecap(tripId), { waitUntil: "load" });
       await page.waitForSelector(".recapActions", { timeout: 30000 });
       const hint = await page.locator(".recapPage .hint").textContent();
-      ok(name, /^2 фото и видео/.test(hint?.trim() ?? ""), `recap includes video clip: "${hint?.trim().slice(0, 40)}"`);
+      ok(name, /^2 кадра/.test(hint?.trim() ?? ""), `recap includes video clip: "${hint?.trim().slice(0, 40)}"`);
 
       /* ── Очистка неиспользуемых файлов ── */
       step = "orphans";

@@ -59,6 +59,20 @@ export async function buildTripHtml(trip: Trip, onProgress?: (s: string) => void
   ${imgs.length ? `<div class="ph${imgs.length === 1 ? " one" : ""}">${imgs.join("")}</div>` : ""}
 </section>`);
   }
+  // Фото, добавленные к поездке целиком (не к конкретному моменту).
+  const inMoments = new Set(trip.checkpoints.flatMap((c) => [c.coverMediaId, ...c.mediaIds]));
+  const extra: string[] = [];
+  for (const id of trip.mediaIds) {
+    if (used >= MAX_PHOTOS || inMoments.has(id)) continue;
+    const meta = await getMediaMeta(id).catch(() => null);
+    if (meta?.kind === "audio") continue;
+    const src = await photo(id);
+    if (src) {
+      extra.push(`<img src="${src}" alt="" loading="lazy">`);
+      used++;
+    }
+  }
+  if (extra.length) parts.push(`<section class="m"><h2>Фото поездки</h2><div class="ph${extra.length === 1 ? " one" : ""}">${extra.join("")}</div></section>`);
   return `<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(trip.title)} — Моя история</title>

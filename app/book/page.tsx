@@ -60,6 +60,21 @@ function TripPages({ trip, kinds }: { trip: Trip; kinds: Map<string, string> }) 
           </article>
         );
       })}
+      {(() => {
+        const inMoments = new Set(trip.checkpoints.flatMap((c) => [c.coverMediaId, ...c.mediaIds]));
+        const extra = trip.mediaIds.filter((id) => !inMoments.has(id) && kinds.get(id) === "image").slice(0, 12);
+        if (!extra.length) return null;
+        return (
+          <article className="bkMoment">
+            <h3>Фото поездки</h3>
+            <div className={`bkPhotos n${Math.min(extra.length, 4)}`}>
+              {extra.map((id) => (
+                <MediaImg key={id} id={id} variant="original" />
+              ))}
+            </div>
+          </article>
+        );
+      })()}
     </section>
   );
 }

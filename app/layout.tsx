@@ -5,6 +5,7 @@ import { RegisterSW } from "@/components/RegisterSW";
 import { DriveBanner } from "@/components/DriveSection";
 import { OfflineBar } from "@/components/OfflineBar";
 import { AppLock } from "@/components/AppLock";
+import { SavePrompt } from "@/components/SavePrompt";
 
 export const metadata: Metadata = {
   title: "Моя история",
@@ -23,12 +24,21 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
+      <head>
+        {/* Замок Face ID: прячем содержимое ещё до первой отрисовки, чтобы записи не мелькнули на экране. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("app-lock-credential")&&!(Date.now()-Number(sessionStorage.getItem("app-lock-unlocked-at")||0)<${5 * 60_000}))document.documentElement.classList.add("applocked")}catch(e){}`,
+          }}
+        />
+      </head>
       <body>
         {children}
         <RegisterSW />
         <DriveBanner />
         <OfflineBar />
+        <SavePrompt />
         <AppLock />
       </body>
     </html>

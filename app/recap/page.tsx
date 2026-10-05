@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
-import { saveFile } from "@/lib/download";
+import { saveFile, shrinkImage } from "@/lib/download";
+import { plural } from "@/lib/format";
 import { getMediaMeta, getMediaUrl } from "@/lib/media/store";
 import { routes } from "@/lib/routes";
 import { fmtKm, isEvent, momentDate, tripDateRange, tripKm } from "@/lib/stats";
@@ -21,76 +22,89 @@ const nice = (d: string) => {
   return y ? `${day} ${RU_MONTHS_GEN[m - 1]} ${y}` : d;
 };
 
+/** Кадр слайда загружается только когда он рядом (текущий и следующий) — иначе 40 оригиналов не влезут в память телефона. */
+type Media = { src: string; video?: boolean; img?: HTMLImageElement | HTMLVideoElement; loading?: Promise<void> };
 type Slide =
-  | { kind: "title"; dur: number; img?: HTMLImageElement }
-  | { kind: "photo"; dur: number; img: HTMLImageElement | HTMLVideoElement; title: string; sub: string; video?: boolean }
-  | { kind: "end"; dur: number; img?: HTMLImageElement };
+  | { kind: "title"; dur: number; media?: Media }
+  | { kind: "photo"; dur: number; media: Media; title: string; sub: string }
+  | { kind: "end"; dur: number; media?: Media };
 
-/** Видео для ролика: берём до 6 секунд из начала (без звука). */
-async function loadVideo(id: string): Promise<{ el: HTMLVideoElement; dur: number } | null> {
-  const url = await getMediaUrl(id, "original").catch(() => null);
-  if (!url) return null;
-  const v = document.createElement("video");
-  v.muted = true;
-  v.playsInline = true;
-  v.preload = "auto";
-  v.src = url;
-  const ok = await new Promise<boolean>((res) => {
-    const t = setTimeout(() => res(false), 8000);
-    v.onloadeddata = () => {
-      clearTimeout(t);
-      res(true);
-    };
-    v.onerror = () => {
-      clearTimeout(t);
-      res(false);
-    };
-  });
-  if (!ok || !v.videoWidth) return null;
-  return { el: v, dur: Math.max(2, Math.min(6, Number.isFinite(v.duration) ? v.duration : 4)) };
+function ensure(m?: Media): Promise<void> {
+  if (!m || m.img) return Promise.resolve();
+  if (m.loading) return m.loading;
+  m.loading = new Promise<void>((resolve) => {
+    if (m.video) {
+      const v = document.createElement("video");
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = "auto";
+      const done = () => {
+        clearTimeout(t);
+        resolve();
+      };
+      const t = setTimeout(done, 8000);
+      v.onloadeddata = () => {
+        m.img = v;
+        done();
+      };
+      v.onerror = done;
+      v.src = m.src;
+    } else {
+      const i = new Image();
+      i.src = m.src;
+      i.decode()
+        .then(() => (m.img = i))
+        .catch(() => undefined)
+        .finally(resolve);
+    }
+  }).finally(() => (m.loading = undefined));
+  return m.loading;
 }
 
-async function loadImage(id: string): Promise<HTMLImageElement | null> {
-  const meta = await getMediaMeta(id).catch(() => null);
-  if (meta && meta.kind !== "image") return null;
-  const url = (await getMediaUrl(id, "original").catch(() => null)) ?? (await getMediaUrl(id, "thumb").catch(() => null));
-  if (!url) return null;
-  const img = new Image();
-  img.src = url;
-  try {
-    await img.decode();
-    return img;
-  } catch {
-    return null;
+function release(m?: Media) {
+  if (!m?.img) return;
+  if (m.img instanceof HTMLVideoElement) {
+    m.img.pause();
+    m.img.removeAttribute("src");
+    m.img.load();
   }
+  m.img = undefined;
 }
 
 async function buildSlides(trip: Trip, onProgress: (n: number, total: number) => void): Promise<Slide[]> {
   const items: { id: string; title: string; sub: string }[] = [];
+  const seen = new Set<string>();
   for (const c of trip.checkpoints) {
     const ids = Array.from(new Set([c.coverMediaId, ...c.mediaIds].filter(Boolean) as string[])).slice(0, 4);
     const place = c.location?.label?.split(",").slice(0, 2).join(",");
-    for (const id of ids) items.push({ id, title: c.title, sub: [nice(momentDate(trip, c)) + (c.time ? `, ${c.time}` : ""), place].filter(Boolean).join(" · ") });
+    for (const id of ids) {
+      seen.add(id);
+      items.push({ id, title: c.title || trip.title, sub: [nice(momentDate(trip, c)) + (c.time ? `, ${c.time}` : ""), place].filter(Boolean).join(" · ") });
+    }
   }
+  // Фото, добавленные к поездке целиком (вкладки «Фото» / «Видео»).
+  for (const id of trip.mediaIds) if (!seen.has(id)) items.push({ id, title: trip.title, sub: tripDateRange(trip) });
   const picked = items.slice(0, MAX_PHOTOS);
   const slides: Slide[] = [];
   let n = 0;
   for (const it of picked) {
     onProgress(++n, picked.length);
     const meta = await getMediaMeta(it.id).catch(() => null);
-    if (meta?.kind === "audio") continue;
-    if (meta?.kind === "video") {
-      const v = await loadVideo(it.id);
-      if (v) slides.push({ kind: "photo", dur: v.dur, img: v.el, title: it.title, sub: it.sub, video: true });
+    if (!meta || meta.kind === "audio") continue;
+    if (meta.kind === "video") {
+      const src = await getMediaUrl(it.id, "original").catch(() => null);
+      if (src) slides.push({ kind: "photo", dur: Math.max(2, Math.min(6, meta.duration ?? 4)), media: { src, video: true }, title: it.title, sub: it.sub });
       continue;
     }
-    const img = await loadImage(it.id);
-    if (img) slides.push({ kind: "photo", dur: 2.8, img, title: it.title, sub: it.sub });
+    // Уменьшенная копия (1280 px) — лёгкая для памяти и достаточная для ролика 720×1280.
+    const url = (await getMediaUrl(it.id, "original").catch(() => null)) ?? (await getMediaUrl(it.id, "thumb").catch(() => null));
+    const small = url ? await shrinkImage(url, 1280, 0.85) : null;
+    if (small) slides.push({ kind: "photo", dur: 2.8, media: { src: URL.createObjectURL(small) }, title: it.title, sub: it.sub });
   }
-  const stills = slides.filter((s): s is Extract<Slide, { kind: "photo" }> => s.kind === "photo" && !s.video).map((s) => s.img as HTMLImageElement);
-  const firstImg = stills[0];
-  const lastImg = stills[stills.length - 1];
-  return [{ kind: "title", dur: 3, img: firstImg }, ...slides, { kind: "end", dur: 3.2, img: lastImg }];
+  const stills = slides.filter((s): s is Extract<Slide, { kind: "photo" }> => s.kind === "photo" && !s.media.video).map((s) => s.media.src);
+  const first = stills[0];
+  const last = stills[stills.length - 1];
+  return [{ kind: "title", dur: 3, media: first ? { src: first } : undefined }, ...slides, { kind: "end", dur: 3.2, media: last ? { src: last } : undefined }];
 }
 
 function cover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, zoom: number, panX: number, panY: number) {
@@ -123,15 +137,16 @@ function drawSlide(ctx: CanvasRenderingContext2D, s: Slide, local: number, index
   const p = Math.min(1, local / s.dur);
   ctx.fillStyle = "#0a0d14";
   ctx.fillRect(0, 0, W, H);
-  if (s.kind === "photo" && s.video) {
-    const v = s.img as HTMLVideoElement;
+  const img = s.media?.img;
+  if (img instanceof HTMLVideoElement) {
+    const v = img;
     // Держим кадр видео в такт ролику.
     if (Math.abs(v.currentTime - local) > 0.35) v.currentTime = Math.min(local, (v.duration || local) - 0.05);
     if (v.paused && local > 0.05 && local < s.dur) void v.play().catch(() => undefined);
     cover(ctx, v, 1, 0, 0);
-  } else if (s.img) {
+  } else if (img) {
     const dir = index % 2 ? 1 : -1;
-    cover(ctx, s.img, 1.04 + 0.1 * p, dir * 30 * (p - 0.5), -dir * 20 * (p - 0.5));
+    cover(ctx, img, 1.04 + 0.1 * p, dir * 30 * (p - 0.5), -dir * 20 * (p - 0.5));
   }
   if (s.kind === "photo") {
     const g = ctx.createLinearGradient(0, H * 0.6, 0, H);
@@ -168,7 +183,7 @@ function drawSlide(ctx: CanvasRenderingContext2D, s: Slide, local: number, index
     ctx.font = "600 34px -apple-system, Roboto, sans-serif";
     ctx.fillStyle = "rgba(255,255,255,.9)";
     const facts = [
-      `${trip.checkpoints.length} ${trip.checkpoints.length % 10 === 1 && trip.checkpoints.length % 100 !== 11 ? "момент" : "моментов"}`,
+      `${trip.checkpoints.length} ${plural(trip.checkpoints.length, "момент", "момента", "моментов")}`,
       `${photos} фото`,
       km && km >= 0.1 && !isEvent(trip) ? `${fmtKm(km)} км` : null,
     ].filter(Boolean);
@@ -196,18 +211,25 @@ function Recap() {
 
   const total = useMemo(() => (slides ?? []).reduce((s, x) => s + x.dur, 0), [slides]);
   const photos = (slides ?? []).filter((s) => s.kind === "photo").length;
-  const pauseVideos = () => (slides ?? []).forEach((s) => s.kind === "photo" && s.video && (s.img as HTMLVideoElement).pause());
+  const pauseVideos = () => (slides ?? []).forEach((s) => s.media?.img instanceof HTMLVideoElement && s.media.img.pause());
 
   useEffect(() => {
     if (!trip) return;
     let alive = true;
-    buildSlides(trip, (n, t) => alive && setLoading(`Готовлю фото ${n} из ${t}…`)).then((s) => {
+    let built: Slide[] = [];
+    buildSlides(trip, (n, t) => alive && setLoading(`Готовлю фото ${n} из ${t}…`)).then(async (s) => {
+      built = s;
       if (!alive) return;
+      await Promise.all([ensure(s[0]?.media), ensure(s[1]?.media)]);
       setSlides(s);
       setLoading("");
     });
     return () => {
       alive = false;
+      built.forEach((x) => {
+        release(x.media);
+        if (x.kind === "photo" && !x.media.video) URL.revokeObjectURL(x.media.src);
+      });
     };
   }, [trip]);
 
@@ -219,6 +241,12 @@ function Recap() {
       const s = slides[i];
       if (t < acc + s.dur || i === slides.length - 1) {
         const local = t - acc;
+        // Держим в памяти только соседние кадры.
+        void ensure(s.media);
+        void ensure(slides[i + 1]?.media);
+        slides.forEach((x, j) => {
+          if ((j < i - 1 || j > i + 2) && x.media !== s.media && x.media !== slides[i + 1]?.media) release(x.media);
+        });
         drawSlide(ctx, s, local, i, trip, photos);
         // Плавный переход в следующий слайд.
         const next = slides[i + 1];
@@ -252,7 +280,8 @@ function Recap() {
     raf.current = requestAnimationFrame(() => loop(onEnd));
   }
 
-  function play() {
+  async function play() {
+    if (recording) return;
     if (playing) {
       cancelAnimationFrame(raf.current);
       offset.current += (performance.now() - startAt.current) / 1000;
@@ -260,6 +289,7 @@ function Recap() {
       setPlaying(false);
       return;
     }
+    await Promise.all([ensure(slides?.[0]?.media), ensure(slides?.[1]?.media)]);
     startAt.current = performance.now();
     setPlaying(true);
     loop();
@@ -272,6 +302,8 @@ function Recap() {
     const type = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
     if (!type || !("captureStream" in c)) return alert("Этот браузер не умеет записывать видео. Попробуйте Chrome или Safari поновее.");
     cancelAnimationFrame(raf.current);
+    pauseVideos();
+    await Promise.all([ensure(slides?.[0]?.media), ensure(slides?.[1]?.media)]);
     const stream = c.captureStream(30);
     const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 5_000_000 });
     const chunks: Blob[] = [];
@@ -305,7 +337,7 @@ function Recap() {
         <span style={{ width: 40 }} />
       </header>
       <div className="recapStage">
-        <canvas ref={canvas} width={W} height={H} onClick={play} />
+        <canvas ref={canvas} width={W} height={H} onClick={() => !recording && void play()} />
         {loading && <p className="recapLoading">{loading}</p>}
         <span className="recapProgress">
           <i style={{ width: `${progress * 100}%` }} />
@@ -323,7 +355,7 @@ function Recap() {
         </div>
       )}
       <p className="hint">
-        {photos} фото и видео · {Math.round(total)} сек. Видео собирается прямо на телефоне — это занимает столько же времени, сколько длится ролик.
+        {photos} {plural(photos, "кадр", "кадра", "кадров")} · {Math.round(total)} сек. Видео собирается прямо на телефоне — это занимает столько же времени, сколько длится ролик.
       </p>
     </main>
   );

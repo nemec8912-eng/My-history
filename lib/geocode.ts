@@ -26,7 +26,8 @@ function build(name: string | undefined, a: Record<string, string> | undefined, 
 
 export async function searchPlaces(q: string, signal?: AbortSignal): Promise<PlaceHit[]> {
   const params = new URLSearchParams({ q, format: "jsonv2", addressdetails: "1", limit: "7", "accept-language": "ru", countrycodes: "ru" });
-  const res = await fetch(`${BASE}/search?${params}`, { signal });
+  // Все запросы к OpenStreetMap — по очереди, не чаще раза в секунду (правила сервиса).
+  const res = await throttled(() => fetch(`${BASE}/search?${params}`, { signal }));
   if (!res.ok) throw new Error("Поиск мест недоступен");
   const list = (await res.json()) as { name?: string; display_name: string; lat: string; lon: string; address?: Record<string, string> }[];
   const seen = new Set<string>();
@@ -38,7 +39,7 @@ export async function searchPlaces(q: string, signal?: AbortSignal): Promise<Pla
 export async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
   try {
     const params = new URLSearchParams({ lat: String(lat), lon: String(lon), format: "jsonv2", addressdetails: "1", "accept-language": "ru", zoom: "16" });
-    const res = await fetch(`${BASE}/reverse?${params}`);
+    const res = await throttled(() => fetch(`${BASE}/reverse?${params}`));
     if (!res.ok) return null;
     const p = (await res.json()) as { name?: string; display_name?: string; address?: Record<string, string> };
     if (!p.display_name) return null;
@@ -164,7 +165,7 @@ export async function searchAddress(q: string, near?: { lat: number; lon: number
     const d = 0.3;
     params.set("viewbox", `${near.lon - d},${near.lat + d},${near.lon + d},${near.lat - d}`);
   }
-  const res = await fetch(`${BASE}/search?${params}`, { signal });
+  const res = await throttled(() => fetch(`${BASE}/search?${params}`, { signal }));
   if (!res.ok) throw new Error("Поиск адреса недоступен");
   const list = (await res.json()) as { display_name: string; lat: string; lon: string; address?: Record<string, string> }[];
   const seen = new Set<string>();

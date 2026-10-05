@@ -11,11 +11,13 @@ export async function collagePhotoIds(trip: Trip, count: number): Promise<string
   const ordered = [...trip.checkpoints].sort((a, b) => b.importance - a.importance);
   const ids: string[] = [];
   for (const c of ordered) for (const id of [c.coverMediaId, ...c.mediaIds]) if (id && !ids.includes(id)) ids.push(id);
+  // Фото, добавленные к поездке целиком.
+  for (const id of [trip.coverMediaId, ...trip.mediaIds]) if (id && !ids.includes(id)) ids.push(id);
   const out: string[] = [];
   for (const id of ids) {
     if (out.length >= count) break;
     const m = await getMediaMeta(id).catch(() => null);
-    if (m?.kind === "image" || (m?.kind === "video" && m)) out.push(id);
+    if (m?.kind === "image" || m?.kind === "video") out.push(id);
   }
   return out;
 }

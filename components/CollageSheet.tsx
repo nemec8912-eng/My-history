@@ -13,16 +13,29 @@ export function CollageSheet({ trip, onClose }: { trip: Trip; onClose: () => voi
   const [format, setFormat] = useState<CollageFormat>("post");
   const [busy, setBusy] = useState(true);
   const [count, setCount] = useState(0);
+  const [blob, setBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     let alive = true;
     setBusy(true);
+    setBlob(null);
     (async () => {
       const ids = await collagePhotoIds(trip, layout);
-      if (!alive || !canvas.current) return;
+      // Рисуем на отдельном холсте: если пользователь успел переключить вариант, старый рисунок не попадёт на экран.
+      const off = document.createElement("canvas");
+      await drawCollage(off, trip, ids, format);
+      const c = canvas.current;
+      if (!alive || !c) return;
+      c.width = off.width;
+      c.height = off.height;
+      c.getContext("2d")!.drawImage(off, 0, 0);
       setCount(ids.length);
-      await drawCollage(canvas.current, trip, ids, format);
-      if (alive) setBusy(false);
+      // Картинка готовится заранее — тогда «Поделиться» на iPhone срабатывает сразу по нажатию.
+      const b = await new Promise<Blob | null>((r) => off.toBlob(r, "image/jpeg", 0.92));
+      if (alive) {
+        setBlob(b);
+        setBusy(false);
+      }
     })();
     return () => {
       alive = false;
@@ -30,9 +43,6 @@ export function CollageSheet({ trip, onClose }: { trip: Trip; onClose: () => voi
   }, [trip, layout, format]);
 
   async function save() {
-    const c = canvas.current;
-    if (!c) return;
-    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.92));
     if (blob) await saveFile(blob, `${trip.title.replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 50) || "коллаж"}.jpg`, { share: true, title: trip.title });
   }
 
@@ -61,7 +71,7 @@ export function CollageSheet({ trip, onClose }: { trip: Trip; onClose: () => voi
           <button className="softBtn" onClick={onClose}>
             Закрыть
           </button>
-          <button className="primary" onClick={save} disabled={busy || count === 0}>
+          <button className="primary" onClick={save} disabled={busy || count === 0 || !blob}>
             Сохранить / отправить
           </button>
         </div>
