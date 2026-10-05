@@ -34,8 +34,8 @@ export function PlaceView() {
     );
 
   const place = cp.place ?? { moments: [] };
-  const save = (next: Checkpoint) =>
-    update({ ...trip, checkpoints: trip.checkpoints.map((c) => (c.id === next.id ? next : c)) });
+  const save = (next: Checkpoint) => update((cur) => ({ ...cur, checkpoints: cur.checkpoints.map((c) => (c.id === next.id ? next : c)) }));
+  const patch = (fn: (c: Checkpoint) => Checkpoint) => update((cur) => ({ ...cur, checkpoints: cur.checkpoints.map((c) => (c.id === cp.id ? fn(c) : c)) }));
   const arrived = place.arrivedAt ?? cp.time;
   const a = minutesOf(arrived);
   const b = minutesOf(place.leftAt);
@@ -111,12 +111,12 @@ export function PlaceView() {
           </div>
         ) : (
           <>
-            <MediaPicker kinds={[tab as MediaKind]} onAdd={(items) => save(withAddedMedia(cp, items))} />
+            <MediaPicker kinds={[tab as MediaKind]} onAdd={(items) => patch((c) => withAddedMedia(c, items))} />
             <MediaGallery
               ids={cp.mediaIds}
               kinds={[tab as MediaKind]}
-              onRemove={(mid) => save(withRemovedMedia(cp, mid))}
-              onSetCover={(mid) => save({ ...cp, coverMediaId: mid })}
+              onRemove={(mid) => patch((c) => withRemovedMedia(c, mid))}
+              onSetCover={(mid) => patch((c) => ({ ...c, coverMediaId: mid }))}
               empty={tab === "image" ? "Добавьте фотографии этого места — можно сразу много." : "Пока пусто."}
             />
           </>

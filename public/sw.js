@@ -61,6 +61,8 @@ self.addEventListener("fetch", (event) => {
 function idbGet(key) {
   return new Promise((resolve) => {
     const open = indexedDB.open("my-history");
+    // Если приложение ещё ни разу не открывалось — не создаём пустую базу (её создаст само приложение).
+    open.onupgradeneeded = () => open.transaction.abort();
     open.onerror = () => resolve(undefined);
     open.onsuccess = () => {
       try {
@@ -78,6 +80,7 @@ function idbGet(key) {
 function idbSet(key, value) {
   return new Promise((resolve) => {
     const open = indexedDB.open("my-history");
+    open.onupgradeneeded = () => open.transaction.abort();
     open.onerror = () => resolve();
     open.onsuccess = () => {
       try {

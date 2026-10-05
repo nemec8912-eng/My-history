@@ -7,7 +7,7 @@
  *     на тот же media_id; 4) старые копии удаляются ТОЛЬКО отдельным действием
  *     и только для файлов, у которых есть проверенная копия на Диске.
  */
-import { getSupabase, getUserId, MEDIA_BUCKET } from "../supabase";
+import { fetchAllRows, getSupabase, getUserId, MEDIA_BUCKET } from "../supabase";
 import { getDriveToken, uploadToDrive } from "./gdrive";
 
 export const SUPABASE_FREE_LIMIT = 1024 ** 3; // 1 ГБ на бесплатном тарифе
@@ -17,9 +17,7 @@ type Row = { media_id: string; variant: string; provider: string; location: { bu
 async function rows(): Promise<Row[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const { data, error } = await sb.from("media_storage").select("media_id, variant, provider, location, size").eq("status", "ok");
-  if (error) throw error;
-  return (data ?? []) as Row[];
+  return fetchAllRows<Row>(() => sb.from("media_storage").select("media_id, variant, provider, location, size").eq("status", "ok").order("media_id").order("variant").order("provider"));
 }
 
 export type StoragePlan = {

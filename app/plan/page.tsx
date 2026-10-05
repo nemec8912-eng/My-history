@@ -13,6 +13,7 @@ import { useTrip } from "@/lib/useTrip";
 import { useUserData } from "@/lib/userdata";
 import type { Expense, ExpenseCategory, PackItem, Trip, TripDoc } from "@/lib/types";
 import { BUILTIN_TEMPLATES, CATEGORIES, rub } from "@/lib/plan";
+import { localToday } from "@/lib/format";
 
 type Tab = "pack" | "money" | "docs";
 
@@ -123,7 +124,7 @@ function Money({ trip, save }: { trip: Trip; save: (e: Expense[]) => void }) {
           e.preventDefault();
           const n = Number(amount.replace(/\s/g, "").replace(",", "."));
           if (!n || n < 0) return;
-          save([...list, { id: newId(), title: title.trim() || CATEGORIES[cat].label, amount: n, category: cat, date: new Date().toISOString().slice(0, 10) }]);
+          save([...list, { id: newId(), title: title.trim() || CATEGORIES[cat].label, amount: n, category: cat, date: localToday() }]);
           setTitle("");
           setAmount("");
         }}
@@ -160,7 +161,7 @@ function Money({ trip, save }: { trip: Trip; save: (e: Expense[]) => void }) {
   );
 }
 
-function Docs({ trip, save }: { trip: Trip; save: (d: TripDoc[]) => void }) {
+function Docs({ trip, mutate }: { trip: Trip; mutate: (fn: (d: TripDoc[]) => TripDoc[]) => void }) {
   const docs = trip.meta?.docs ?? [];
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -171,7 +172,7 @@ function Docs({ trip, save }: { trip: Trip; save: (d: TripDoc[]) => void }) {
     if (!local.length || !navigator.onLine) return;
     (async () => {
       const updated = await Promise.all(local.map((d) => uploadDoc(d).catch(() => d)));
-      if (updated.some((d, i) => d.provider !== local[i].provider)) save(docs.map((d) => updated.find((u) => u.id === d.id) ?? d));
+      if (updated.some((d, i) => d.provider !== local[i].provider)) mutate((cur) => cur.map((d) => updated.find((u) => u.id === d.id) ?? d));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
@@ -185,7 +186,7 @@ function Docs({ trip, save }: { trip: Trip; save: (d: TripDoc[]) => void }) {
     try {
       const added: TripDoc[] = [];
       for (const f of files) added.push(await addDoc(f));
-      save([...docs, ...added]);
+      mutate((cur) => [...cur, ...added]);
     } catch (er) {
       setErr(er instanceof Error ? er.message : String(er));
     } finally {
@@ -209,7 +210,7 @@ function Docs({ trip, save }: { trip: Trip; save: (d: TripDoc[]) => void }) {
   async function del(d: TripDoc) {
     if (!confirm(`Удалить документ «${d.name}»? Файл будет удалён и с устройства, и из облака (с Google Диска — в его корзину).`)) return;
     await removeDoc(d);
-    save(docs.filter((x) => x.id !== d.id));
+    mutate((cur) => cur.filter((x) => x.id !== d.id));
   }
 
   return (
@@ -252,7 +253,7 @@ function Plan() {
   const { trip, status, update, error } = useTrip(id);
   if (status === "loading") return <main className="shell"><p className="muted">Загрузка…</p></main>;
   if (!trip) return <main className="shell"><p className="muted">Поездка не найдена.</p></main>;
-  const setMeta = (patch: Partial<NonNullable<Trip["meta"]>>) => update({ ...trip, meta: { ...trip.meta, ...patch } });
+  const setMeta = (patch: Partial<NonNullable<Trip["meta"]>>) => update((cur) => ({ ...cur, meta: { ...cur.meta, ...patch } }));
   const tabs: { id: Tab; label: string }[] = [
     { id: "pack", label: "Сборы" },
     { id: "money", label: "Расходы" },
@@ -277,7 +278,7 @@ function Plan() {
       {error && <p className="errorBar">{error}</p>}
       {tab === "pack" && <Packing trip={trip} save={(packing) => setMeta({ packing })} />}
       {tab === "money" && <Money trip={trip} save={(expenses) => setMeta({ expenses })} />}
-      {tab === "docs" && <Docs trip={trip} save={(docs) => setMeta({ docs })} />}
+      {tab === "docs" && <Docs trip={trip} mutate={(fn) => update((cur) => ({ ...cur, meta: { ...cur.meta, docs: fn(cur.meta?.docs ?? []) } }))} />}
     </main>
   );
 }

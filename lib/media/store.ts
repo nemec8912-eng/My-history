@@ -139,10 +139,15 @@ type StoredBuffer = { __buf: ArrayBuffer; type: string };
  * Сохраняет файл в IndexedDB. Safari в приватном режиме (и иногда с объектами File из выбора файлов)
  * не умеет хранить Blob («Error preparing Blob/File data…») — тогда храним содержимое как ArrayBuffer.
  */
+const MAX_BUFFER_COPY = 400 * 1024 * 1024;
+
 async function putBlob(key: string, blob: Blob) {
   try {
     await idb.set(STORES.blobs, key, blob);
-  } catch {
+  } catch (e) {
+    // Огромный файл целиком в память не копируем — это уронило бы страницу на телефоне.
+    if (blob.size > MAX_BUFFER_COPY) throw new Error(`Файл слишком большой для сохранения на этом устройстве (${Math.round(blob.size / 1024 / 1024)} МБ)`);
+    if ((e as DOMException)?.name === "QuotaExceededError") throw new Error("На устройстве закончилось место для файлов приложения");
     const stored: StoredBuffer = { __buf: await blob.arrayBuffer(), type: blob.type };
     await idb.set(STORES.blobs, key, stored);
   }
@@ -162,20 +167,19 @@ async function getPending(): Promise<MediaId[]> {
   return (await idb.get<MediaId[]>(STORES.kv, PENDING_KEY).catch(() => undefined)) ?? [];
 }
 
-async function setPending(ids: MediaId[]) {
-  await idb.set(STORES.kv, PENDING_KEY, Array.from(new Set(ids))).catch(() => undefined);
+/** Атомарное изменение очереди (одна транзакция): параллельные добавления не теряются. */
+async function changePending(key: string, fn: (ids: MediaId[]) => MediaId[]) {
+  await idb.update<MediaId[]>(STORES.kv, key, (cur) => Array.from(new Set(fn(cur ?? [])))).catch(() => undefined);
 }
 
 export async function queueUpload(ids: MediaId[]) {
-  await setPending([...(await getPending()), ...ids]);
+  await changePending(PENDING_KEY, (cur) => [...cur, ...ids]);
 }
 
 async function getPendingDrive(): Promise<MediaId[]> {
   return (await idb.get<MediaId[]>(STORES.kv, PENDING_DRIVE).catch(() => undefined)) ?? [];
 }
-async function setPendingDrive(ids: MediaId[]) {
-  await idb.set(STORES.kv, PENDING_DRIVE, Array.from(new Set(ids))).catch(() => undefined);
-}
+
 
 /** Сколько файлов ждут загрузки в облако (Supabase). */
 export async function pendingUploadCount(): Promise<number> {
@@ -200,15 +204,28 @@ async function syncDrive(userId: string) {
   const sb = getSupabase();
   if (!sb) return;
   const pending = await getPendingDrive();
-  const left: MediaId[] = [];
+  // Пока запись о файле не дошла до облака (таблица media), привязку к Диску сохранить нельзя — ждём.
+  const notInCloudYet = new Set(await getPending());
   for (const id of pending) {
+    if (notInCloudYet.has(id)) continue;
     try {
-      const raw = await getBlob(`${id}:raw`);
       const meta = await idb.get<MediaItem>(STORES.meta, id);
-      if (!raw || !meta) continue;
+      // Оригинал без сжатия; для больших видео без Диска при добавлении — сам файл.
+      const raw = (await getBlob(`${id}:raw`)) ?? (meta && !meta.drive ? await getBlob(`${id}:original`) : undefined);
+      if (!raw || !meta) {
+        await changePending(PENDING_DRIVE, (cur) => cur.filter((x) => x !== id));
+        continue;
+      }
       const ext = (meta.name?.split(".").pop() || meta.mime.split("/")[1] || "bin").slice(0, 5);
       const stamp = meta.createdAt.slice(0, 19).replace(/[T:]/g, "-");
-      const { fileId, size } = await uploadToDrive(raw, `${stamp}_${id.slice(0, 8)}.${ext}`, raw.type || meta.mime, { mediaId: id });
+      // Если файл уже загружен, а запись о нём не сохранилась — не загружаем второй раз.
+      const doneKey = `drive-file:${id}`;
+      let up = await idb.get<{ fileId: string; size: number }>(STORES.kv, doneKey).catch(() => undefined);
+      if (!up) {
+        up = await uploadToDrive(raw, `${stamp}_${id.slice(0, 8)}.${ext}`, raw.type || meta.mime, { mediaId: id });
+        await idb.set(STORES.kv, doneKey, up).catch(() => undefined);
+      }
+      const { fileId, size } = up;
       const { error } = await sb.from("media_storage").upsert(
         {
           media_id: id,
@@ -222,20 +239,16 @@ async function syncDrive(userId: string) {
         { onConflict: "media_id,variant,provider" }
       );
       if (error) throw error;
+      await changePending(PENDING_DRIVE, (cur) => cur.filter((x) => x !== id));
+      await idb.del(STORES.kv, doneKey).catch(() => undefined);
       // Освобождаем место на телефоне: фото остаются в виде облегчённой копии, большие файлы — на Диске.
       if (meta.kind === "image" || raw.size > 20 * 1024 * 1024) await idb.del(STORES.blobs, `${id}:raw`).catch(() => undefined);
       emitSync();
     } catch (e) {
-      if (e instanceof Error && e.message === "NO_TOKEN") {
-        left.push(id);
-        continue;
-      }
-      console.warn("Не удалось загрузить на Google Диск", id, e);
-      left.push(id);
+      if (!(e instanceof Error && e.message === "NO_TOKEN")) console.warn("Не удалось загрузить на Google Диск", id, e);
+      // остаётся в очереди — повторим позже
     }
   }
-  const now = await getPendingDrive();
-  await setPendingDrive([...left, ...now.filter((id) => !pending.includes(id))]);
   emitSync();
 }
 
@@ -268,6 +281,11 @@ async function uploadOne(id: MediaId, userId: string): Promise<boolean> {
   for (const variant of variants) {
     const blob = await getBlob(`${id}:${variant}`);
     if (!blob) continue;
+    if (variant === "original" && blob.size > SUPABASE_MAX_FILE) {
+      // Такой большой файл бесплатное облако не примет: он ждёт Google Диска (и остаётся на телефоне).
+      await changePending(PENDING_DRIVE, (cur) => [...cur, id]);
+      continue;
+    }
     const path = `${userId}/${id}/${variant}`;
     const { error } = await sb.storage.from(MEDIA_BUCKET).upload(path, blob, {
       upsert: true,
@@ -291,6 +309,8 @@ async function uploadOne(id: MediaId, userId: string): Promise<boolean> {
   return true;
 }
 
+const SUPABASE_MAX_FILE = 45 * 1024 * 1024;
+
 let syncing: Promise<void> | null = null;
 
 /** Догружает в облако всё, что было сохранено офлайн или до входа в аккаунт. */
@@ -299,19 +319,15 @@ export function syncPendingUploads(): Promise<void> {
   syncing = (async () => {
     const userId = await getUserId();
     if (!userId) return;
-    const pending = await getPending();
-    const left: MediaId[] = [];
-    for (const id of pending) {
+    for (const id of await getPending()) {
       try {
         await uploadOne(id, userId);
+        await changePending(PENDING_KEY, (cur) => cur.filter((x) => x !== id));
+        emitSync();
       } catch (e) {
         console.warn("Не удалось загрузить медиа", id, e);
-        left.push(id);
       }
     }
-    // Учитываем файлы, добавленные во время синхронизации.
-    const now = await getPending();
-    await setPending([...left, ...now.filter((id) => !pending.includes(id))]);
     await syncDrive(userId).catch((e) => console.warn("Google Диск", e));
   })().finally(() => {
     syncing = null;
@@ -333,6 +349,8 @@ async function downloadFromCloud(id: MediaId, variant: Variant): Promise<Blob | 
     rows.find((r) => r.variant === variant) ??
     rows.find((r) => r.variant === "original") ??
     rows[0];
+  // Для плитки-превью не скачиваем целиком оригинал с Диска (у видео это могут быть сотни мегабайт).
+  if (variant === "thumb" && row.variant !== "thumb" && row.provider === "gdrive") return null;
   if (row.provider === "gdrive") {
     const loc = row.location as { fileId: string };
     const blob = await downloadFromDrive(loc.fileId);
@@ -421,7 +439,7 @@ export async function addMedia(file: File): Promise<MediaItem> {
   };
   await idb.set(STORES.meta, id, meta);
   await queueUpload([id]);
-  if (drive) await setPendingDrive([...(await getPendingDrive()), id]);
+  if (drive) await changePending(PENDING_DRIVE, (cur) => [...cur, id]);
   emitSync();
   void syncPendingUploads();
   return meta;

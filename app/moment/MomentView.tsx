@@ -56,8 +56,9 @@ export function MomentView() {
     const key = `${cp.id}|${cp.location!.lat}|${cp.location!.lon}|${momentDate(trip, cp)}|${cp.time ?? ""}`;
     if (weatherTried.current === key) return;
     weatherTried.current = key;
+    const id = cp.id;
     fetchWeather(cp.location!.lat, cp.location!.lon, momentDate(trip, cp), cp.time).then((w) => {
-      if (w) update({ ...trip, checkpoints: trip.checkpoints.map((c) => (c.id === cp.id ? { ...c, meta: { ...c.meta, weather: w } } : c)) });
+      if (w) update((cur) => ({ ...cur, checkpoints: cur.checkpoints.map((c) => (c.id === id ? { ...c, meta: { ...c.meta, weather: w } } : c)) }));
     });
   }, [trip, cp, update]);
 
@@ -78,20 +79,22 @@ export function MomentView() {
    * Для отдельного события его дата, название и место следуют за моментами,
    * чтобы событие переезжало в нужное место хронологии, «Этого дня» и поиска.
    */
-  const save = (n: Checkpoint) => {
-    const checkpoints = trip.checkpoints.map((c) => (c.id === n.id ? n : c));
-    let next = { ...trip, checkpoints };
-    if (isEvent(trip)) {
-      const dates = checkpoints.map((c) => c.meta?.date ?? trip.date).sort();
-      next = { ...next, date: dates[0] ?? trip.date, meta: { ...trip.meta, kind: "event" } };
-      if (checkpoints.length === 1) {
-        const only = checkpoints[0];
-        const region = only.location?.label?.split(",").slice(1).join(",").trim();
-        next = { ...next, title: only.title || trip.title, place: region || trip.place };
+  const patch = (id: string, fn: (c: Checkpoint) => Checkpoint) =>
+    void update((cur) => {
+      const checkpoints = cur.checkpoints.map((c) => (c.id === id ? fn(c) : c));
+      let next = { ...cur, checkpoints };
+      if (isEvent(cur)) {
+        const dates = checkpoints.map((c) => c.meta?.date ?? cur.date).sort();
+        next = { ...next, date: dates[0] ?? cur.date, meta: { ...cur.meta, kind: "event" } };
+        if (checkpoints.length === 1) {
+          const only = checkpoints[0];
+          const region = only.location?.label?.split(",").slice(1).join(",").trim();
+          next = { ...next, title: only.title || cur.title, place: region || cur.place };
+        }
       }
-    }
-    void update(next);
-  };
+      return next;
+    });
+  const save = (n: Checkpoint) => patch(n.id, () => n);
   const deleteMoment = async () => {
     const last = isEvent(trip) && trip.checkpoints.length === 1;
     const ok = confirm(
@@ -104,7 +107,7 @@ export function MomentView() {
       await remove();
       router.replace(routes.home);
     } else {
-      await update({ ...trip, checkpoints: trip.checkpoints.filter((c) => c.id !== cp.id) });
+      await update((cur) => ({ ...cur, checkpoints: cur.checkpoints.filter((c) => c.id !== cp.id) }));
       router.replace(routes.trip(trip.id));
     }
   };
@@ -211,11 +214,11 @@ export function MomentView() {
 
         <MediaGallery
           ids={cp.mediaIds}
-          onRemove={(mid) => save(withRemovedMedia(cp, mid))}
-          onSetCover={(mid) => save({ ...cp, coverMediaId: mid })}
+          onRemove={(mid) => patch(cp.id, (c) => withRemovedMedia(c, mid))}
+          onSetCover={(mid) => patch(cp.id, (c) => ({ ...c, coverMediaId: mid }))}
           empty="Фото, видео и голос этого момента появятся здесь."
         />
-        <MediaPicker compact onAdd={(items) => save(withAddedMedia(cp, items))} />
+        <MediaPicker compact onAdd={(items) => patch(cp.id, (c) => withAddedMedia(c, items))} />
 
         {hasCoords(cp) && (
           <div className="miniMap">

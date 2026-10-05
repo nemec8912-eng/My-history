@@ -929,3 +929,4 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .tlFilters { display: flex; gap: 6px; align-items: flex-start; }
 .tlFilters > .tagChip { flex: none; margin-top: 2px; }
 .tlFilters .tagFilter { flex: 1; min-width: 0; }
+.offlineBar.failed { pointer-events: auto; color: #ffd0d4; background: rgba(60,14,20,.96); border-color: rgba(255,90,100,.55); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }

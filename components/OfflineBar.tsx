@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onSyncChange, pendingUploadCount, syncPendingUploads } from "@/lib/media/store";
-import { flushPendingTrips, onTripSyncChange, pendingTripCount } from "@/lib/repo";
+import { failedTrips, flushPendingTrips, onTripSyncChange, pendingTripCount, retryFailed } from "@/lib/repo";
 import { plural } from "@/lib/format";
 import { getUserId } from "@/lib/supabase";
 
@@ -14,6 +14,7 @@ export function OfflineBar() {
   const [online, setOnline] = useState(true);
   const [trips, setTrips] = useState(0);
   const [files, setFiles] = useState(0);
+  const [failed, setFailed] = useState<{ id: string; title: string; error: string }[]>([]);
 
   useEffect(() => {
     const refresh = () => {
@@ -26,6 +27,7 @@ export function OfflineBar() {
           setFiles(f);
         })
         .catch(() => undefined);
+      failedTrips().then(setFailed).catch(() => undefined);
     };
     const sync = () => {
       if (!navigator.onLine) return refresh();
@@ -51,6 +53,12 @@ export function OfflineBar() {
   }, []);
 
   const waiting = trips + files;
+  if (failed.length && online)
+    return (
+      <button className="offlineBar failed" onClick={() => void retryFailed()} title={failed.map((f) => `${f.title}: ${f.error}`).join("\n")}>
+        ⚠ Облако не приняло {failed.length} {plural(failed.length, "изменение", "изменения", "изменений")} («{failed[0].title}»): {failed[0].error}. Всё сохранено на телефоне · Повторить
+      </button>
+    );
   if (online && waiting === 0) return null;
   return (
     <div className={`offlineBar ${online ? "syncing" : ""}`} role="status">

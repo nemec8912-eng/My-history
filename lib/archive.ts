@@ -7,7 +7,7 @@ import { blobToDataUrl } from "./download";
 import { getMediaMeta, getMediaUrl, importMediaPreview } from "./media/store";
 import { getRepo } from "./repo";
 import { tripMediaIds } from "./stats";
-import { getSupabase } from "./supabase";
+import { fetchAllRows, getSupabase } from "./supabase";
 import type { MediaItem, Trip } from "./types";
 
 type ArchiveMedia = MediaItem & { storage?: { provider: string; variant: string; location: unknown }[]; thumb?: string };
@@ -17,12 +17,14 @@ export async function buildArchive(withPreviews: boolean, onProgress?: (s: strin
   const repo = await getRepo();
   const sys = await repo.system().catch(() => null);
   const trips = [...(await repo.list()), ...(await repo.listTrash()), ...(sys ? [sys] : [])];
-  const ids = Array.from(new Set(trips.flatMap(tripMediaIds)));
+  const ids = Array.from(new Set([...trips.flatMap(tripMediaIds), ...(sys?.meta?.userData?.albums ?? []).flatMap((a) => a.mediaIds)]));
   const storage = new Map<string, ArchiveMedia["storage"]>();
   const sb = getSupabase();
   if (sb && repo.mode === "cloud") {
-    const { data } = await sb.from("media_storage").select("media_id, variant, provider, location").eq("status", "ok");
-    for (const r of data ?? []) {
+    const data = await fetchAllRows<{ media_id: string; variant: string; provider: string; location: unknown }>(() =>
+      sb.from("media_storage").select("media_id, variant, provider, location").eq("status", "ok").order("media_id").order("variant").order("provider")
+    );
+    for (const r of data) {
       const list = storage.get(r.media_id) ?? [];
       list.push({ provider: r.provider, variant: r.variant, location: r.location });
       storage.set(r.media_id, list);

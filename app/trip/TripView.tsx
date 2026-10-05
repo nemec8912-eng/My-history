@@ -327,14 +327,14 @@ export function TripView() {
 
       {tab === "photos" && (
         <section className="tabBody">
-          <MediaPicker kinds={["image"]} onAdd={(items) => update(withAddedMedia(trip, items))} />
+          <MediaPicker kinds={["image"]} onAdd={(items) => update((cur) => withAddedMedia(cur, items))} />
           <MediaGallery ids={tripMediaIds(trip)} kinds={["image"]} empty="Фотографий пока нет." />
         </section>
       )}
 
       {tab === "videos" && (
         <section className="tabBody">
-          <MediaPicker kinds={["video"]} onAdd={(items) => update(withAddedMedia(trip, items))} />
+          <MediaPicker kinds={["video"]} onAdd={(items) => update((cur) => withAddedMedia(cur, items))} />
           <MediaGallery ids={tripMediaIds(trip)} kinds={["video"]} empty="Видео пока нет." />
         </section>
       )}

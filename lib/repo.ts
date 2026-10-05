@@ -2,12 +2,19 @@
  * Хранилище поездок. Два режима с одинаковым интерфейсом:
  *  - local: IndexedDB на устройстве (пока пользователь не вошёл или Supabase не настроен);
  *  - cloud: Supabase (таблицы trips и checkpoints), с локальным кэшем для офлайна.
+ *
+ * Надёжность:
+ *  - каждое изменение сначала записывается на устройство (одной транзакцией IndexedDB), затем в облако;
+ *  - отправка в облако идёт строго по очереди (одна блокировка на сохранения и догрузку),
+ *    и запись снимается с очереди только если в облако ушла её последняя версия;
+ *  - если облако отказало не из-за сети, запись попадает в «не отправлено» с текстом ошибки, а не крутится вечно.
  */
 import { addMediaFromDataUrl, queueUpload, listLocalMediaIds, syncPendingUploads } from "./media/store";
 import { idb, STORES } from "./media/idb";
 import { createCheckpoint, newId, normalizeOrder } from "./markerStyle";
+import { localToday } from "./format";
 import { getSupabase, getUserId } from "./supabase";
-import type { Checkpoint, Trip } from "./types";
+import type { Checkpoint, Trip, UserData } from "./types";
 
 const LOCAL_KEY = "trips";
 const CACHE_KEY = "trips-cloud-cache";
@@ -24,10 +31,17 @@ export interface TripRepo {
   /** Корзина. Записи старше 30 дней при открытии удаляются окончательно. */
   listTrash(): Promise<Trip[]>;
   restore(id: string): Promise<void>;
-  /** Удаляет навсегда (сами файлы фото/видео на Google Диске не трогаются). */
+  /** Удаляет навсегда (сами файлы фото/видео не трогаются). */
   purge(id: string): Promise<void>;
   /** Служебная запись с альбомами, «Хочу поехать» и шаблонами (синхронизируется как обычная поездка). */
   system(): Promise<Trip | null>;
+  /** Id служебной записи этого пользователя (один и тот же на всех устройствах). */
+  systemId(): string;
+  /**
+   * Всё, включая корзину и служебную запись, — строго из облака (без подстановки кэша).
+   * Нужно там, где ошибка опасна: например, перед удалением «ненужных» файлов.
+   */
+  everythingStrict(): Promise<Trip[]>;
 }
 
 export const isSystem = (t: Trip) => t.meta?.kind === "system";
@@ -44,10 +58,30 @@ const restored = (t: Trip): Trip => {
   return { ...t, meta, updatedAt: new Date().toISOString() };
 };
 
+/** Служебная запись: локально — постоянный id, в облаке — производный от id пользователя. */
+const LOCAL_SYSTEM_ID = "00000000-0000-4000-8000-000000005157";
+const cloudSystemId = (uid: string) => `${uid.slice(0, 24)}5157e3a0c0de`;
+
+/** Объединяет данные нескольких служебных записей (например, после переноса с другого устройства). */
+export function mergeUserData(a: UserData = {}, b: UserData = {}): UserData {
+  const merge = <T extends { id: string }>(x: T[] = [], y: T[] = []) => [...x, ...y.filter((i) => !x.some((j) => j.id === i.id))];
+  return { albums: merge(a.albums, b.albums), wishes: merge(a.wishes, b.wishes), packTemplates: merge(a.packTemplates, b.packTemplates) };
+}
+
+function pickSystem(all: Trip[], id: string): Trip | null {
+  const list = all.filter(isSystem);
+  if (!list.length) return null;
+  const main = list.find((t) => t.id === id) ?? list[0];
+  if (list.length === 1) return main;
+  const userData = list.reduce<UserData>((acc, t) => mergeUserData(acc, t.meta?.userData), main.meta?.userData ?? {});
+  return { ...main, meta: { ...main.meta, userData } };
+}
+
 /* ───────────── Очередь изменений без сети ───────────── */
 
 const PENDING_SAVES = "pending-trip-saves";
 const PENDING_DELETES = "pending-trip-deletes";
+const FAILED = "failed-trip-saves";
 const tripSyncListeners = new Set<() => void>();
 export function onTripSyncChange(fn: () => void): () => void {
   tripSyncListeners.add(fn);
@@ -58,8 +92,18 @@ const emitTripSync = () => tripSyncListeners.forEach((fn) => fn());
 async function getIds(key: string): Promise<string[]> {
   return (await idb.get<string[]>(STORES.kv, key).catch(() => undefined)) ?? [];
 }
-async function setIds(key: string, ids: string[]) {
-  await idb.set(STORES.kv, key, Array.from(new Set(ids))).catch(() => undefined);
+/** Атомарно меняет список id (одна транзакция — без гонок с параллельными изменениями). */
+async function changeIds(key: string, fn: (ids: string[]) => string[]) {
+  await idb.update<string[]>(STORES.kv, key, (cur) => Array.from(new Set(fn(cur ?? []))));
+  emitTripSync();
+}
+
+type FailedMap = Record<string, string>;
+async function getFailed(): Promise<FailedMap> {
+  return (await idb.get<FailedMap>(STORES.kv, FAILED).catch(() => undefined)) ?? {};
+}
+async function changeFailed(fn: (m: FailedMap) => FailedMap) {
+  await idb.update<FailedMap>(STORES.kv, FAILED, (cur) => fn({ ...(cur ?? {}) }));
   emitTripSync();
 }
 
@@ -68,12 +112,29 @@ export async function pendingTripCount(): Promise<number> {
   return (await getIds(PENDING_SAVES)).length + (await getIds(PENDING_DELETES)).length;
 }
 
+/** Изменения, которые облако не приняло (не из-за сети): id → текст ошибки. */
+export async function failedTrips(): Promise<{ id: string; title: string; error: string }[]> {
+  const m = await getFailed();
+  const cache = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
+  return Object.entries(m).map(([id, error]) => ({ id, error, title: cache.find((t) => t.id === id)?.title ?? "Запись" }));
+}
+
+/** Повторить отправку не принятых облаком изменений. */
+export async function retryFailed() {
+  const ids = Object.keys(await getFailed());
+  await changeFailed(() => ({}));
+  await changeIds(PENDING_SAVES, (cur) => [...cur, ...ids]);
+  await flushPendingTrips();
+}
+
 /** Ошибка связи (а не отказ сервера): такое изменение просто ждёт сети. */
 export function isNetworkError(e: unknown): boolean {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
   const msg = String((e as { message?: string })?.message ?? e);
-  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timeout|offline/i.test(msg);
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timeout|offline|aborted/i.test(msg);
 }
+
+const errText = (e: unknown) => String((e as { message?: string })?.message ?? e).slice(0, 200);
 
 function sortTrips(trips: Trip[]) {
   return [...trips].sort((a, b) => (b.date + (b.time ?? "")).localeCompare(a.date + (a.time ?? "")));
@@ -84,7 +145,7 @@ export function upgradeTrip(t: Partial<Trip> & { id: string }): Trip {
   const now = new Date().toISOString();
   return {
     title: "Без названия",
-    date: now.slice(0, 10),
+    date: localToday(),
     mediaIds: [],
     createdAt: now,
     updatedAt: now,
@@ -93,16 +154,29 @@ export function upgradeTrip(t: Partial<Trip> & { id: string }): Trip {
   } as Trip;
 }
 
-/* ───────────── Локальный режим ───────────── */
+/* ───────────── Локальное хранение ───────────── */
 
+/** Чтение списка. Ошибка чтения НЕ превращается в пустой список — иначе следующая запись стёрла бы всё. */
 async function readLocal(key = LOCAL_KEY): Promise<Trip[]> {
-  const data = await idb.get<Trip[]>(STORES.kv, key).catch(() => undefined);
+  const data = await idb.get<Trip[]>(STORES.kv, key);
   return (data ?? []).map(upgradeTrip);
 }
 
 async function writeLocal(trips: Trip[], key = LOCAL_KEY) {
   await idb.set(STORES.kv, key, trips);
 }
+
+/** Изменение списка поездок одной транзакцией (без потери параллельных изменений). */
+async function mutateLocal(key: string, fn: (list: Trip[]) => Trip[]) {
+  await idb.update<Trip[]>(STORES.kv, key, (cur) => fn(cur ?? []));
+}
+const upsertIn = (trip: Trip) => (list: Trip[]) => {
+  const i = list.findIndex((t) => t.id === trip.id);
+  const next = [...list];
+  if (i >= 0) next[i] = trip;
+  else next.push(trip);
+  return next;
+};
 
 type LegacyMemory = { id: string; title: string; date: string; place?: string; text?: string; photos?: string[] };
 
@@ -154,11 +228,7 @@ const localRepo: TripRepo = {
     return (await readLocal()).find((t) => t.id === id) ?? null;
   },
   async save(trip) {
-    const trips = await readLocal();
-    const i = trips.findIndex((t) => t.id === trip.id);
-    if (i >= 0) trips[i] = trip;
-    else trips.push(trip);
-    await writeLocal(trips);
+    await mutateLocal(LOCAL_KEY, upsertIn(trip));
   },
   async remove(id) {
     const t = await localRepo.get(id);
@@ -166,8 +236,8 @@ const localRepo: TripRepo = {
   },
   async listTrash() {
     const all = await readLocal();
-    const old = all.filter((t) => isTrashed(t) && expired(t));
-    if (old.length) await writeLocal(all.filter((t) => !old.includes(t)));
+    const old = all.filter((t) => isTrashed(t) && expired(t)).map((t) => t.id);
+    if (old.length) await mutateLocal(LOCAL_KEY, (list) => list.filter((t) => !old.includes(t.id)));
     return sortTrips(all.filter((t) => isTrashed(t) && !expired(t)));
   },
   async restore(id) {
@@ -175,10 +245,14 @@ const localRepo: TripRepo = {
     if (t) await localRepo.save(restored(t));
   },
   async purge(id) {
-    await writeLocal((await readLocal()).filter((t) => t.id !== id));
+    await mutateLocal(LOCAL_KEY, (list) => list.filter((t) => t.id !== id));
   },
   async system() {
-    return (await readLocal()).find(isSystem) ?? null;
+    return pickSystem(await readLocal(), LOCAL_SYSTEM_ID);
+  },
+  systemId: () => LOCAL_SYSTEM_ID,
+  async everythingStrict() {
+    return readLocal();
   },
 };
 
@@ -323,6 +397,24 @@ function fromRows(t: TripRow, cps: CheckpointRow[]): Trip {
   });
 }
 
+/** Supabase отдаёт не больше 1000 строк за запрос — читаем постранично, иначе часть данных молча пропадёт. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function selectAll<T>(table: string, build?: (q: any) => any): Promise<T[]> {
+  const sb = getSupabase()!;
+  const page = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += page) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = sb.from(table).select("*").order("id");
+    if (build) q = build(q);
+    const { data, error } = (await q.range(from, from + page - 1)) as { data: T[] | null; error: unknown };
+    if (error) throw error;
+    out.push(...((data ?? []) as T[]));
+    if (!data || data.length < page) break;
+  }
+  return out;
+}
+
 async function cloudWrite(ownerId: string, trip: Trip) {
   const sb = getSupabase()!;
   const tripRow = toTripRow(trip, ownerId);
@@ -353,6 +445,44 @@ async function cloudDelete(id: string) {
   if (error) throw error;
 }
 
+/** Одна очередь на все отправки в облако: сохранение и догрузка не перетирают друг друга. */
+let lock: Promise<unknown> = Promise.resolve();
+function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const run = lock.then(fn, fn);
+  lock = run.catch(() => undefined);
+  return run;
+}
+
+/**
+ * Отправляет в облако текущую (последнюю на устройстве) версию поездки.
+ * Снимает её с очереди, только если пока шла отправка она не изменилась.
+ */
+async function pushOne(ownerId: string, id: string): Promise<"ok" | "offline" | "failed"> {
+  const t = (await readLocal(CACHE_KEY)).find((x) => x.id === id);
+  if (!t) {
+    await changeIds(PENDING_SAVES, (cur) => cur.filter((x) => x !== id));
+    return "ok";
+  }
+  try {
+    await cloudWrite(ownerId, t);
+  } catch (e) {
+    if (isNetworkError(e)) return "offline";
+    console.warn("Облако не приняло запись", id, e);
+    await changeIds(PENDING_SAVES, (cur) => cur.filter((x) => x !== id));
+    await changeFailed((m) => ({ ...m, [id]: errText(e) }));
+    return "failed";
+  }
+  const now = (await readLocal(CACHE_KEY).catch(() => [] as Trip[])).find((x) => x.id === id);
+  if (!now || now.updatedAt === t.updatedAt) {
+    await changeIds(PENDING_SAVES, (cur) => cur.filter((x) => x !== id));
+    await changeFailed((m) => {
+      delete m[id];
+      return m;
+    });
+  }
+  return "ok";
+}
+
 let flushing: Promise<number> | null = null;
 
 /** Отправляет в облако всё, что было изменено без сети. Возвращает, сколько осталось. */
@@ -361,38 +491,27 @@ export function flushPendingTrips(): Promise<number> {
   flushing = (async () => {
     const ownerId = await getUserId();
     if (!ownerId || !getSupabase()) return 0;
-    const cache = await readLocal(CACHE_KEY);
-    const saves = await getIds(PENDING_SAVES);
-    const leftSaves: string[] = [];
-    for (let i = 0; i < saves.length; i++) {
-      const id = saves[i];
-      const t = cache.find((x) => x.id === id);
-      if (!t) continue;
-      try {
-        await cloudWrite(ownerId, t);
-      } catch (e) {
-        if (isNetworkError(e)) {
-          leftSaves.push(...saves.slice(i)); // сети нет — остальное попробуем позже
+    for (let round = 0; round < 3; round++) {
+      const saves = await getIds(PENDING_SAVES);
+      if (!saves.length) break;
+      let offline = false;
+      for (const id of saves) {
+        const r = await exclusive(() => pushOne(ownerId, id));
+        if (r === "offline") {
+          offline = true;
           break;
         }
-        leftSaves.push(id);
-        console.warn("Не удалось отправить поездку", id, e);
       }
+      if (offline) break;
     }
-    const nowSaves = await getIds(PENDING_SAVES);
-    await setIds(PENDING_SAVES, [...leftSaves, ...nowSaves.filter((id) => !saves.includes(id))]);
-
-    const dels = await getIds(PENDING_DELETES);
-    const leftDels: string[] = [];
-    for (const id of dels) {
+    for (const id of await getIds(PENDING_DELETES)) {
       try {
-        await cloudDelete(id);
-      } catch {
-        leftDels.push(id);
+        await exclusive(() => cloudDelete(id));
+        await changeIds(PENDING_DELETES, (cur) => cur.filter((x) => x !== id));
+      } catch (e) {
+        if (isNetworkError(e)) break;
       }
     }
-    const nowDels = await getIds(PENDING_DELETES);
-    await setIds(PENDING_DELETES, [...leftDels, ...nowDels.filter((id) => !dels.includes(id))]);
     return pendingTripCount();
   })()
     .catch(() => pendingTripCount())
@@ -408,42 +527,40 @@ if (typeof window !== "undefined") {
 
 function cloudRepo(ownerId: string): TripRepo {
   const sb = getSupabase()!;
+  const sysId = cloudSystemId(ownerId);
 
-  async function putCache(trip: Trip) {
-    const cache = await readLocal(CACHE_KEY);
-    const i = cache.findIndex((t) => t.id === trip.id);
-    if (i >= 0) cache[i] = trip;
-    else cache.push(trip);
-    await writeLocal(cache, CACHE_KEY).catch(() => undefined);
+  const putCache = (trip: Trip) => mutateLocal(CACHE_KEY, upsertIn(trip));
+
+  /** Всё из облака, без подстановки кэша (ошибка — исключение). */
+  async function fromCloud(): Promise<Trip[]> {
+    const [trips, cps] = await Promise.all([selectAll<TripRow>("trips"), selectAll<CheckpointRow>("checkpoints")]);
+    const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
+    const byTrip = new Map<string, CheckpointRow[]>();
+    for (const c of cps) {
+      if (!byTrip.has(c.trip_id)) byTrip.set(c.trip_id, []);
+      byTrip.get(c.trip_id)!.push(c);
+    }
+    return trips.map((t) => mergeMeta(fromRows(t, byTrip.get(t.id) ?? []), cached.find((c) => c.id === t.id)));
   }
 
   async function all(): Promise<Trip[]> {
     await flushPendingTrips().catch(() => undefined);
     try {
-      const [{ data: trips, error: e1 }, { data: cps, error: e2 }] = await Promise.all([
-        sb.from("trips").select("*"),
-        sb.from("checkpoints").select("*"),
-      ]);
-      if (e1) throw e1;
-      if (e2) throw e2;
-      const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
-      // Не отправленные ещё изменения важнее того, что пока лежит в облаке.
-      const pendingSaves = new Set(await getIds(PENDING_SAVES));
-      const pendingDels = new Set(await getIds(PENDING_DELETES));
-      const fromCloud = (trips as TripRow[])
-        .filter((t) => !pendingDels.has(t.id))
-        .map((t) =>
-          pendingSaves.has(t.id) && cached.find((c) => c.id === t.id)
-            ? cached.find((c) => c.id === t.id)!
-            : mergeMeta(fromRows(t, (cps ?? []) as CheckpointRow[]), cached.find((c) => c.id === t.id))
-        );
-      const onlyLocal = cached.filter((c) => pendingSaves.has(c.id) && !fromCloud.some((t) => t.id === c.id));
-      const result = sortTrips([...fromCloud, ...onlyLocal]);
-      await writeLocal(result, CACHE_KEY).catch(() => undefined);
+      const cloud = await fromCloud();
+      // Не отправленные (или не принятые облаком) изменения важнее того, что пока лежит в облаке.
+      const local = new Set([...(await getIds(PENDING_SAVES)), ...Object.keys(await getFailed())]);
+      const dels = new Set(await getIds(PENDING_DELETES));
+      let result: Trip[] = [];
+      await mutateLocal(CACHE_KEY, (cached) => {
+        const merged = cloud.filter((t) => !dels.has(t.id)).map((t) => (local.has(t.id) ? cached.find((c) => c.id === t.id) ?? t : t));
+        const onlyLocal = cached.filter((c) => local.has(c.id) && !merged.some((t) => t.id === c.id));
+        result = sortTrips([...merged, ...onlyLocal].map(upgradeTrip));
+        return result;
+      });
       return result;
     } catch (e) {
       console.warn("Нет связи с облаком, показываю кэш", e);
-      return sortTrips(await readLocal(CACHE_KEY));
+      return sortTrips(await readLocal(CACHE_KEY).catch(() => [] as Trip[]));
     }
   }
 
@@ -453,35 +570,32 @@ function cloudRepo(ownerId: string): TripRepo {
       return (await all()).filter((t) => !hidden(t));
     },
     async get(id) {
-      if ((await getIds(PENDING_SAVES)).includes(id)) {
-        const local = (await readLocal(CACHE_KEY)).find((t) => t.id === id);
-        if (local) return local;
+      const local = new Set([...(await getIds(PENDING_SAVES)), ...Object.keys(await getFailed())]);
+      if (local.has(id)) {
+        const t = (await readLocal(CACHE_KEY).catch(() => [] as Trip[])).find((x) => x.id === id);
+        if (t) return t;
       }
       try {
-        const [{ data: t, error: e1 }, { data: cps, error: e2 }] = await Promise.all([
+        const [{ data: t, error: e1 }, cps] = await Promise.all([
           sb.from("trips").select("*").eq("id", id).maybeSingle(),
-          sb.from("checkpoints").select("*").eq("trip_id", id),
+          selectAll<CheckpointRow>("checkpoints", (q) => q.eq("trip_id", id)),
         ]);
         if (e1) throw e1;
-        if (e2) throw e2;
         if (!t) return null;
         const cached = (await readLocal(CACHE_KEY).catch(() => [] as Trip[])).find((c) => c.id === id);
-        return mergeMeta(fromRows(t as TripRow, (cps ?? []) as CheckpointRow[]), cached);
+        return mergeMeta(fromRows(t as TripRow, cps), cached);
       } catch {
-        return (await readLocal(CACHE_KEY)).find((t) => t.id === id) ?? null;
+        return (await readLocal(CACHE_KEY).catch(() => [] as Trip[])).find((t) => t.id === id) ?? null;
       }
     },
     async save(trip) {
       // Сначала на устройство — изменение не потеряется, даже если сети нет.
       await putCache(trip);
-      await setIds(PENDING_SAVES, [...(await getIds(PENDING_SAVES)), trip.id]);
-      try {
-        await cloudWrite(ownerId, trip);
-        const left = (await getIds(PENDING_SAVES)).filter((id) => id !== trip.id);
-        await setIds(PENDING_SAVES, left);
-      } catch (e) {
-        if (isNetworkError(e)) return; // отправится само, когда появится сеть
-        throw e;
+      await changeIds(PENDING_SAVES, (cur) => [...cur, trip.id]);
+      const r = await exclusive(() => pushOne(ownerId, trip.id));
+      if (r === "failed") {
+        const why = (await getFailed())[trip.id];
+        throw new Error(`Сохранено на устройстве, но облако не приняло изменение: ${why}`);
       }
     },
     async remove(id) {
@@ -494,20 +608,33 @@ function cloudRepo(ownerId: string): TripRepo {
       return list.filter((t) => !expired(t));
     },
     async restore(id) {
-      const t = (await all()).find((x) => x.id === id);
+      // Берём поездку целиком именно по id (а не из общего списка) — чтобы не потерять ни одной точки.
+      const t = await repo.get(id);
       if (t) await repo.save(restored(t));
     },
     async system() {
-      return (await all()).find(isSystem) ?? null;
+      return pickSystem(await all(), sysId);
+    },
+    systemId: () => sysId,
+    async everythingStrict() {
+      await flushPendingTrips().catch(() => undefined);
+      const cloud = await fromCloud();
+      const local = new Set([...(await getIds(PENDING_SAVES)), ...Object.keys(await getFailed())]);
+      const cached = await readLocal(CACHE_KEY).catch(() => [] as Trip[]);
+      return [...cloud, ...cached.filter((c) => local.has(c.id) && !cloud.some((t) => t.id === c.id))];
     },
     async purge(id) {
-      await writeLocal((await readLocal(CACHE_KEY)).filter((t) => t.id !== id), CACHE_KEY).catch(() => undefined);
-      await setIds(PENDING_SAVES, (await getIds(PENDING_SAVES)).filter((x) => x !== id));
+      await mutateLocal(CACHE_KEY, (list) => list.filter((t) => t.id !== id)).catch(() => undefined);
+      await changeIds(PENDING_SAVES, (cur) => cur.filter((x) => x !== id));
+      await changeFailed((m) => {
+        delete m[id];
+        return m;
+      });
       try {
-        await cloudDelete(id);
+        await exclusive(() => cloudDelete(id));
       } catch (e) {
         if (!isNetworkError(e)) throw e;
-        await setIds(PENDING_DELETES, [...(await getIds(PENDING_DELETES)), id]);
+        await changeIds(PENDING_DELETES, (cur) => [...cur, id]);
       }
     },
   };
@@ -523,7 +650,7 @@ export async function getRepo(): Promise<TripRepo> {
 /** Сколько поездок хранится только на этом устройстве (ещё не в аккаунте). */
 export async function localTripCount(): Promise<number> {
   await migrateLegacy();
-  return (await readLocal()).length;
+  return (await readLocal()).filter((t) => !isSystem(t)).length;
 }
 
 /** Переносит поездки и медиа с устройства в аккаунт. Копия поездок остаётся в резервной записи на устройстве. */
@@ -535,6 +662,13 @@ export async function migrateLocalToCloud(onProgress?: (msg: string) => void): P
   const repo = cloudRepo(userId);
   let n = 0;
   for (const t of trips) {
+    if (isSystem(t)) {
+      // Альбомы и «Хочу поехать» с устройства добавляем к уже существующим в аккаунте, а не заводим вторую запись.
+      const cur = await repo.system();
+      const base = cur ?? newTrip({ id: repo.systemId(), title: "Служебная запись «Моей истории»", date: "2000-01-01", meta: { kind: "system", userData: {} } });
+      await repo.save({ ...base, meta: { ...base.meta, kind: "system", userData: mergeUserData(base.meta?.userData, t.meta?.userData) }, updatedAt: new Date().toISOString() });
+      continue;
+    }
     onProgress?.(`Поездка «${t.title}»…`);
     await repo.save(t);
     n++;
@@ -552,7 +686,7 @@ export function newTrip(partial: Partial<Trip> = {}): Trip {
   return upgradeTrip({
     id: partial.id ?? newId(),
     title: "Новая поездка",
-    date: now.slice(0, 10),
+    date: localToday(),
     mediaIds: [],
     checkpoints: [],
     createdAt: now,

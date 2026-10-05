@@ -66,3 +66,21 @@ export function authErrorText(message: string): string {
   if (m.includes("failed to fetch") || m.includes("network")) return "Нет связи с Supabase.";
   return message;
 }
+
+/**
+ * Читает все строки постранично: Supabase отдаёт не больше 1000 строк за запрос,
+ * без этого при большом архиве часть данных молча терялась бы.
+ * make() должен вернуть новый запрос с сортировкой (для устойчивых страниц).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchAllRows<T>(make: () => any): Promise<T[]> {
+  const page = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = (await make().range(from, from + page - 1)) as { data: T[] | null; error: unknown };
+    if (error) throw error;
+    out.push(...(data ?? []));
+    if (!data || data.length < page) break;
+  }
+  return out;
+}

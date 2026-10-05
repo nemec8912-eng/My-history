@@ -17,6 +17,8 @@ export function useTrip(id: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  /** Самая свежая версия поездки — чтобы долгие операции (загрузка фото, погода) не затирали новые правки. */
+  const latest = useRef<Trip | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -29,6 +31,7 @@ export function useTrip(id: string | undefined) {
       .then((repo) => repo.get(id))
       .then((t) => {
         if (!alive) return;
+        latest.current = t;
         setTrip(t);
         setStatus(t ? "ready" : "missing");
       })
@@ -42,8 +45,15 @@ export function useTrip(id: string | undefined) {
     };
   }, [id]);
 
-  const update = useCallback((next: Trip) => {
-    const t: Trip = { ...next, checkpoints: normalizeOrder(next.checkpoints), updatedAt: new Date().toISOString() };
+  /**
+   * Сохранить поездку. Можно передать функцию: она получит самую свежую версию —
+   * так правка, сделанная пока грузились фото, не потеряется.
+   */
+  const update = useCallback((next: Trip | ((cur: Trip) => Trip)) => {
+    const base = typeof next === "function" ? (latest.current ? next(latest.current) : null) : next;
+    if (!base) return queue.current;
+    const t: Trip = { ...base, checkpoints: normalizeOrder(base.checkpoints), updatedAt: new Date().toISOString() };
+    latest.current = t;
     setTrip(t);
     setSaving(true);
     // Сохранения выполняются строго по очереди, чтобы не перезаписать новое старым.

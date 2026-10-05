@@ -12,6 +12,7 @@ create table if not exists public.trips (
   cover_media_id text,
   media_ids text[] not null default '{}',
   route jsonb,
+  meta jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -33,8 +34,12 @@ create table if not exists public.checkpoints (
   arrived_by text,
   cover_media_id text,
   media_ids text[] not null default '{}',
-  place jsonb
+  place jsonb,
+  meta jsonb
 );
+-- Для баз, созданных раньше (без колонки meta): даты моментов, погода, метки, корзина, служебная запись.
+alter table public.trips add column if not exists meta jsonb;
+alter table public.checkpoints add column if not exists meta jsonb;
 create index if not exists checkpoints_trip_idx on public.checkpoints(trip_id, position);
 
 -- Медиафайл приложения. Записи дневника ссылаются только на media.id.

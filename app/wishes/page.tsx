@@ -9,6 +9,7 @@ import { createCheckpoint, newId } from "@/lib/markerStyle";
 import { getRepo, newTrip } from "@/lib/repo";
 import { routes } from "@/lib/routes";
 import { useUserData } from "@/lib/userdata";
+import { localToday } from "@/lib/format";
 import type { Location, Wish } from "@/lib/types";
 
 /** «Хочу поехать»: места-мечты. Одним касанием превращаются в поездку. */
@@ -36,7 +37,7 @@ export default function WishesPage() {
   async function go(w: Wish) {
     setBusy(w.id);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       const start = createCheckpoint("start", { title: "Дом", time: undefined });
       const end = createCheckpoint("end", { title: w.title, location: w.location, description: w.note });
       const t = newTrip({ title: w.title, date: today, place: w.location?.label?.split(",").slice(1).join(",").trim() || undefined, checkpoints: [start, end], meta: { kind: "trip" } });

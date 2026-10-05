@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getRepo, newTrip } from "./repo";
-import type { Trip, UserData } from "./types";
+import type { UserData } from "./types";
 
 const listeners = new Set<() => void>();
 let queue: Promise<unknown> = Promise.resolve();
@@ -21,9 +21,14 @@ export async function loadUserData(): Promise<UserData> {
 export function updateUserData(fn: (d: UserData) => UserData): Promise<UserData> {
   const run = queue.then(async () => {
     const repo = await getRepo();
-    const rec: Trip =
-      (await repo.system().catch(() => null)) ??
-      newTrip({ title: "Служебная запись «Моей истории»", date: "2000-01-01", meta: { kind: "system", userData: {} } });
+    let rec = await repo.system();
+    if (!rec) {
+      // Записи нет. Без сети нельзя понять, нет ли её в облаке — не создаём пустую поверх настоящей.
+      if (repo.mode === "cloud" && typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("Нет связи. Альбомы и списки можно будет изменить, когда появится интернет.");
+      }
+      rec = (await repo.get(repo.systemId())) ?? newTrip({ id: repo.systemId(), title: "Служебная запись «Моей истории»", date: "2000-01-01", meta: { kind: "system", userData: {} } });
+    }
     const next = fn(rec.meta?.userData ?? {});
     await repo.save({ ...rec, meta: { ...rec.meta, kind: "system", userData: next }, updatedAt: new Date().toISOString() });
     listeners.forEach((l) => l());
@@ -45,9 +50,17 @@ export function useUserData() {
       listeners.delete(reload);
     };
   }, [reload]);
-  const update = useCallback(async (fn: (d: UserData) => UserData) => {
-    setData((d) => fn(d ?? {})); // сразу на экране
-    await updateUserData(fn);
-  }, []);
+  const update = useCallback(
+    async (fn: (d: UserData) => UserData) => {
+      setData((d) => fn(d ?? {})); // сразу на экране
+      try {
+        await updateUserData(fn);
+      } catch (e) {
+        reload(); // вернуть как было
+        alert(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [reload]
+  );
   return { data, update };
 }

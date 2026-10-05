@@ -41,3 +41,9 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (b === 1) return one;
   return many;
 }
+
+/** Сегодняшняя дата по местному времени (YYYY-MM-DD). toISOString() дал бы дату по Гринвичу — ночью это «вчера». */
+export function localToday(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
