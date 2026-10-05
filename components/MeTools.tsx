@@ -139,7 +139,7 @@ export function MeTools() {
           <input type="file" accept="application/json,.json" hidden onChange={restore} />
         </label>
       </div>
-      <p className="hint">Оригиналы фото и видео остаются на Google Диске — в архиве записано, какой файл к какому моменту относится.</p>
+      <p className="hint">Сами фото и видео в архив не входят (только превью, если выбрано) — в нём записано, где лежит каждый файл и к какому моменту он относится.</p>
 
       <h3 className="meH3">Неиспользуемые файлы</h3>
       <div className="settingsList">

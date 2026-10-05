@@ -949,3 +949,7 @@ html.applocked body > *:not(.appLock) { visibility: hidden !important; }
 /* Вкладки большой локации помещаются целиком: «Моменты» не обрезаются на узком экране */
 .placePage .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
 .placePage .tabs button { padding: 10px 4px; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.meTools button.settingsRow, .meTools label.settingsRow { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-appearance: none; appearance: none; }
+.meTools .settingsList > :last-child { border-bottom: 0; }
+button.taBtn { font: inherit; font-size: 14px; font-weight: 700; line-height: 1.2; min-height: 0; padding: 9px 14px; }
+.quickRow { margin-bottom: 18px; }
