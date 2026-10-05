@@ -133,11 +133,11 @@ async function run(name, browserType, device) {
     await page.goto(BASE + `/trip/?id=${tripId}`, { waitUntil: "load" });
     await page.waitForTimeout(1000);
     const before = (await trips()).find((t) => t.id === tripId).checkpoints.length;
+    await page.getByRole("tab", { name: "Маршрут" }).click().catch(() => {});
+    await page.waitForTimeout(600);
     const add = page.getByRole("button", { name: /Добавить точку/ }).first();
     if (await add.count()) {
-      await page.getByRole("tab", { name: "Маршрут" }).click().catch(() => {});
-      await page.waitForTimeout(500);
-      await page.getByRole("button", { name: /Добавить точку/ }).first().click();
+      await add.click();
       await page.waitForTimeout(800);
       await page.locator(".sheet").getByRole("button", { name: "Отмена" }).click();
       await page.waitForTimeout(1200);
