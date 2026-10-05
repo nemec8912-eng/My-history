@@ -9,11 +9,13 @@ import { saveFile } from "@/lib/download";
 import { newId } from "@/lib/markerStyle";
 import { getDriveToken } from "@/lib/media/gdrive";
 import { routes } from "@/lib/routes";
+import { isEvent } from "@/lib/stats";
 import { useTrip } from "@/lib/useTrip";
 import { useUserData } from "@/lib/userdata";
 import type { Expense, ExpenseCategory, PackItem, Trip, TripDoc } from "@/lib/types";
 import { BUILTIN_TEMPLATES, CATEGORIES, rub } from "@/lib/plan";
 import { localToday } from "@/lib/format";
+import { BackLink } from "@/components/BackLink";
 
 type Tab = "pack" | "money" | "docs";
 
@@ -249,22 +251,30 @@ function Plan() {
   const sp = useSearchParams();
   const router = useRouter();
   const id = sp.get("trip") ?? undefined;
-  const tab = (sp.get("tab") as Tab) || "pack";
+  const requested = sp.get("tab") as Tab | null;
   const { trip, status, update, error } = useTrip(id);
   if (status === "loading") return <main className="shell"><p className="muted">Загрузка…</p></main>;
-  if (!trip) return <main className="shell"><p className="muted">Поездка не найдена.</p></main>;
+  if (!trip)
+    return (
+      <main className="shell">
+        <Link className="backLink" href="/">← На главную</Link>
+        <p className="muted" style={{ marginTop: 20 }}>Поездка не найдена.</p>
+      </main>
+    );
   const setMeta = (patch: Partial<NonNullable<Trip["meta"]>>) => update((cur) => ({ ...cur, meta: { ...cur.meta, ...patch } }));
+  // У события нет сборов — только расходы и документы.
   const tabs: { id: Tab; label: string }[] = [
-    { id: "pack", label: "Сборы" },
+    ...(isEvent(trip) ? [] : [{ id: "pack" as Tab, label: "Сборы" }]),
     { id: "money", label: "Расходы" },
     { id: "docs", label: "Документы" },
   ];
+  const tab: Tab = tabs.some((t) => t.id === requested) ? requested! : tabs[0].id;
   return (
     <main className="shell planPage">
       <header className="nmHead">
-        <Link href={routes.trip(trip.id)} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.trip(trip.id)} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>{trip.title}</h1>
         <span style={{ width: 40 }} />
       </header>

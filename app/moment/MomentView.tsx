@@ -16,6 +16,7 @@ import { fetchWeather } from "@/lib/weather";
 import { shareTripHtml } from "@/lib/shareHtml";
 import { ThenNow } from "@/components/ThenNow";
 import type { Checkpoint } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 const RU_MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -100,7 +101,7 @@ export function MomentView() {
     const ok = confirm(
       last
         ? "Перенести это событие в корзину? Его можно восстановить в течение 30 дней (раздел «Я» → «Корзина»)."
-        : "Удалить этот момент? Фото и видео останутся на Google Диске."
+        : "Удалить этот момент? Сами файлы фото и видео не удаляются."
     );
     if (!ok) return;
     if (last) {
@@ -133,9 +134,9 @@ export function MomentView() {
         {current ? <HeroMedia key={current.id} id={current.id} kind={current.kind} /> : cp.coverMediaId ? <MediaImg id={cp.coverMediaId} variant="original" /> : <span className="coverEmpty">{cp.icon ?? "📍"}</span>}
         <i className="coverShade top" />
         <div className="heroBar">
-          <Link className="roundBtn" href={routes.trip(trip.id)} aria-label="Назад">
+          <BackLink className="roundBtn" href={routes.trip(trip.id)}>
             <Icon name="back" />
-          </Link>
+          </BackLink>
           <span className="heroBarRight">
             <button
               className="roundBtn"
@@ -176,12 +177,8 @@ export function MomentView() {
 
       <section className="momentBody">
         <div className="mInfo">
-          <div className="mPlace">
-            <Icon name="pin" size={22} />
-            <div>
-              <strong>{short || cp.title}</strong>
-              <span>{regionParts.length ? regionParts.join(",").trim() : short ? cp.title : trip.title}</span>
-            </div>
+          <div className="mTitleRow">
+            <h1 className="mTitle">{cp.title || short || trip.title}</h1>
             {cp.meta?.mood && <span className="mMood" title="Настроение">{cp.meta.mood}</span>}
             {w && (
               <span className="mWeather" title={w.label}>
@@ -190,6 +187,15 @@ export function MomentView() {
               </span>
             )}
           </div>
+          {short && (
+            <div className="mPlace">
+              <Icon name="pin" size={22} />
+              <div>
+                <strong>{short}</strong>
+                {regionParts.length > 0 && <span>{regionParts.join(",").trim()}</span>}
+              </div>
+            </div>
+          )}
           {cp.meta?.address && (
             <div className="mDate">
               <Icon name="route" size={20} />

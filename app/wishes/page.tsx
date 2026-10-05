@@ -11,6 +11,7 @@ import { routes } from "@/lib/routes";
 import { useUserData } from "@/lib/userdata";
 import { localToday } from "@/lib/format";
 import type { Location, Wish } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 /** «Хочу поехать»: места-мечты. Одним касанием превращаются в поездку. */
 export default function WishesPage() {
@@ -44,6 +45,8 @@ export default function WishesPage() {
       await (await getRepo()).save(t);
       await update((d) => ({ ...d, wishes: (d.wishes ?? []).map((x) => (x.id === w.id ? { ...x, doneTripId: t.id } : x)) }));
       router.push(routes.trip(t.id));
+    } catch (e) {
+      alert("Не удалось создать поездку: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(null);
     }
@@ -54,9 +57,9 @@ export default function WishesPage() {
   return (
     <main className="shell wishesPage">
       <header className="nmHead">
-        <Link href={routes.me} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.me} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Хочу поехать</h1>
         <Link href={routes.nearby()} className="iconBtnPlain" aria-label="Интересное рядом">
           <Icon name="star" />

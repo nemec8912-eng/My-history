@@ -13,6 +13,7 @@ import { TRAVEL } from "@/lib/travel";
 import { rub, tripSpent } from "@/lib/plan";
 import { useTrips } from "@/lib/useTrips";
 import type { TravelMode, Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 const REGION_COLOR = "#2f7bff";
@@ -88,9 +89,9 @@ export default function StatsPage() {
   return (
     <main className="shell statsPage">
       <header className="nmHead">
-        <Link href={routes.me} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.me} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Статистика и регионы</h1>
         <span style={{ width: 40 }} />
       </header>
@@ -129,7 +130,7 @@ export default function StatsPage() {
           </div>
 
           <section className="statsBlock">
-            <h2>Где я был</h2>
+            <h2>Где вы были</h2>
             <div className="regionsMap">
               <LeafletMap points={points} areas={areas} />
             </div>
@@ -164,7 +165,7 @@ export default function StatsPage() {
 
           {modes.length > 0 && (
             <section className="statsBlock">
-              <h2>Как добирался</h2>
+              <h2>Как добирались</h2>
               <div className="modeBars">
                 {modes.map((m) => {
                   const t = TRAVEL[m.mode as TravelMode];

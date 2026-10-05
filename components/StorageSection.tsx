@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getDriveToken, isDriveEnabled, onDriveChange } from "@/lib/media/gdrive";
 import { deleteSupabaseCopies, moveOriginalsToDrive, storagePlan, SUPABASE_FREE_LIMIT, type StoragePlan } from "@/lib/media/migrate";
 import { errorText } from "@/lib/useTrip";
+import { plural } from "@/lib/format";
 
 export function fmtBytes(n: number) {
   if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toFixed(2)} ТБ`;
@@ -52,7 +53,7 @@ export function StorageSection() {
     setMsg(null);
     try {
       const r = await deleteSupabaseCopies();
-      setMsg({ text: `Освобождено ${fmtBytes(r.bytes)} (${r.deleted} файлов).` });
+      setMsg({ text: `Освобождено ${fmtBytes(r.bytes)} (${r.deleted} ${plural(r.deleted, "файл", "файла", "файлов")}).` });
     } catch (e) {
       setMsg({ text: errorText(e), error: true });
     } finally {

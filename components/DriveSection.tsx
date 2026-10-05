@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { connectDrive, disconnectDrive, driveQuota, getDriveToken, isDriveEnabled, onDriveChange } from "@/lib/media/gdrive";
 import { onSyncChange, pendingDriveCount, syncPendingUploads } from "@/lib/media/store";
+import { plural } from "@/lib/format";
 
 function fmtBytes(n: number) {
   if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toFixed(2)} ТБ`;
@@ -114,25 +115,31 @@ export function DriveSection() {
 export function DriveBanner() {
   const { enabled, active, pending } = useDriveState();
   const [busy, setBusy] = useState(false);
-  if (!enabled || active || pending === 0) return null;
+  const [hidden, setHidden] = useState(false);
+  if (!enabled || active || pending === 0 || hidden) return null;
   return (
-    <button
-      type="button"
-      className="driveBanner"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await connectDrive();
-          await syncPendingUploads();
-        } catch {
-          /* пользователь закрыл окно */
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      ▲ {pending} {pending === 1 ? "файл ждёт" : "файлов ждут"} загрузки на Google Диск · Продолжить
-    </button>
+    <div className="driveBanner" role="status">
+      <button
+        type="button"
+        className="dbMain"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await connectDrive();
+            await syncPendingUploads();
+          } catch {
+            /* пользователь закрыл окно */
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        ▲ {pending} {plural(pending, "файл ждёт", "файла ждут", "файлов ждут")} загрузки на Google Диск · Продолжить
+      </button>
+      <button type="button" className="dbClose" aria-label="Скрыть" onClick={() => setHidden(true)}>
+        ×
+      </button>
+    </div>
   );
 }

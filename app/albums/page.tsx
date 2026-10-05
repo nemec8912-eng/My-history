@@ -5,6 +5,7 @@ import { TabScreen } from "@/components/BottomNav";
 import { MediaImg } from "@/components/media/Media";
 import { MomentsTabs } from "@/components/MomentsTabs";
 import { newId } from "@/lib/markerStyle";
+import { plural } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { useUserData } from "@/lib/userdata";
 
@@ -39,7 +40,7 @@ export default function AlbumsPage() {
               {a.mediaIds.length === 0 && <span className="albumEmpty">📁</span>}
             </span>
             <strong>{a.title}</strong>
-            <span className="muted small">{a.mediaIds.length} файлов</span>
+            <span className="muted small">{a.mediaIds.length} {plural(a.mediaIds.length, "файл", "файла", "файлов")}</span>
           </Link>
         ))}
       </div>

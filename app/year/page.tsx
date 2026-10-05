@@ -16,6 +16,7 @@ import { allTags } from "@/lib/tags";
 import { rub, tripSpent } from "@/lib/plan";
 import { useTrips } from "@/lib/useTrips";
 import type { Checkpoint, Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 
@@ -33,10 +34,15 @@ function YearRecap() {
   const y = useSearchParams().get("y") ?? years[0] ?? String(new Date().getFullYear());
 
   const moments = useMemo(
-    () => (all ?? []).flatMap((t) => t.checkpoints.filter((c) => momentDate(t, c).startsWith(y)).map((c) => ({ t, c }))),
+    // Моменты — это точки с содержанием: обычные точки, а начало/конец пути — только если к ним что-то добавлено.
+    () =>
+      (all ?? []).flatMap((t) =>
+        t.checkpoints.filter((c) => momentDate(t, c).startsWith(y) && (c.kind === "regular" || c.mediaIds.length > 0 || Boolean(c.description))).map((c) => ({ t, c }))
+      ),
     [all, y]
   );
-  const trips = useMemo(() => (all ?? []).filter((t) => t.date.startsWith(y) || moments.some((m) => m.t.id === t.id)), [all, y, moments]);
+  // Поездка относится к году своего начала — так же, как в хронологии и статистике.
+  const trips = useMemo(() => (all ?? []).filter((t) => t.date.startsWith(y)), [all, y]);
   const metas = useMediaMetas(useMemo(() => trips.flatMap(tripMediaIds), [trips]));
 
   const tripList = trips.filter((t) => !isEvent(t));
@@ -62,9 +68,9 @@ function YearRecap() {
   return (
     <main className="shell yearPage">
       <header className="nmHead">
-        <Link href={routes.me} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.me} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Итоги {y}</h1>
         <span style={{ width: 40 }} />
       </header>

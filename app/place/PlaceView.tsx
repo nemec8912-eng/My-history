@@ -10,7 +10,9 @@ import { formatDate, formatDuration, minutesOf } from "@/lib/format";
 import { newId } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
 import { routes } from "@/lib/routes";
+import { momentDate } from "@/lib/stats";
 import type { Checkpoint, MediaKind, Moment } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 type Tab = "image" | "video" | "audio" | "moments";
 
@@ -60,7 +62,7 @@ export function PlaceView() {
     <main className="placePage">
       <div className="placeHero" style={{ ["--accent" as string]: cp.style.color }}>
         {cp.coverMediaId ? <MediaImg id={cp.coverMediaId} variant="original" /> : <span className="placeHeroEmpty">★</span>}
-        <Link className="roundBtn floating" href={routes.trip(trip.id)} aria-label="Назад">←</Link>
+        <BackLink className="roundBtn floating" href={routes.trip(trip.id)}>←</BackLink>
       </div>
 
       <div className="placeBody">
@@ -73,7 +75,7 @@ export function PlaceView() {
         </div>
 
         <div className="metaList">
-          <span>📅 {formatDate(trip.date)}</span>
+          <span>📅 {formatDate(momentDate(trip, cp))}</span>
           {(arrived || place.leftAt) && (
             <span>
               🕒 {[arrived, place.leftAt].filter(Boolean).join(" – ")}
@@ -126,6 +128,7 @@ export function PlaceView() {
       {edit && (
         <Sheet onClose={() => setEdit(false)}>
           <CheckpointEditor
+            defaultDate={trip.date}
             value={cp}
             onCancel={() => setEdit(false)}
             onSave={(next) => {

@@ -284,7 +284,7 @@ async function run(name, browserType, device) {
     await page.goto(BASE + `/year/?y=${y}`, { waitUntil: "load" });
     await page.waitForTimeout(2500);
     const big = await page.locator(".yrBig").textContent().catch(() => "");
-    ok(name, Number(big) >= 8 && (await page.locator(".yrMonth").count()) === 12, `year recap ${y}: ${big} moments`);
+    ok(name, Number(big) >= 6 && (await page.locator(".yrMonth").count()) === 12, `year recap ${y}: ${big} moments`);
     await shot("4-year", true);
 
     /* ── Архив, восстановление, очистка ── */

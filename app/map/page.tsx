@@ -127,7 +127,8 @@ function MapScreen() {
         )}
 
         {selWish && (
-          <Link className="mapCard" href={routes.wishes}>
+          <div className="mapCard">
+            <Link className="mcLink" href={routes.wishes}>
             <span className="mcThumb" style={{ background: "#ffc531" }}>
               <span>⭐</span>
             </span>
@@ -136,21 +137,16 @@ function MapScreen() {
               <span>{selWish.location?.label}</span>
               <span className="muted small">Хочу поехать · открыть список</span>
             </span>
-            <button
-              className="mcClose"
-              aria-label="Закрыть"
-              onClick={(e) => {
-                e.preventDefault();
-                setSel(null);
-              }}
-            >
+            </Link>
+            <button className="mcClose" aria-label="Закрыть" onClick={() => setSel(null)}>
               ×
             </button>
-          </Link>
+          </div>
         )}
 
         {selTrip && selCp && (
-          <Link className="mapCard" href={routes.moment(selTrip.id, selCp.id)}>
+          <div className="mapCard">
+            <Link className="mcLink" href={routes.moment(selTrip.id, selCp.id)}>
             <span className="mcThumb" style={{ background: selCp.style.color }}>
               {selCp.coverMediaId ? <MediaImg id={selCp.coverMediaId} /> : <span>{selCp.icon ?? "📍"}</span>}
             </span>
@@ -161,17 +157,11 @@ function MapScreen() {
                 {formatDate(momentDate(selTrip, selCp))} · {selTrip.title}
               </span>
             </span>
-            <button
-              className="mcClose"
-              aria-label="Закрыть"
-              onClick={(e) => {
-                e.preventDefault();
-                setSel(null);
-              }}
-            >
+            </Link>
+            <button className="mcClose" aria-label="Закрыть" onClick={() => setSel(null)}>
               ×
             </button>
-          </Link>
+          </div>
         )}
       </main>
       <BottomNav />

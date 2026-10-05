@@ -125,7 +125,7 @@ function Lightbox({
             <button
               type="button"
               onClick={() => {
-                if (!confirm(removeText ?? "Убрать этот файл из момента? Сам файл на Google Диске не удаляется.")) return;
+                if (!confirm(removeText ?? "Убрать этот файл из момента? Сам файл не удаляется.")) return;
                 onRemove(item.id);
                 if (items.length <= 1) onClose();
                 else setI((v) => Math.min(v, items.length - 2));

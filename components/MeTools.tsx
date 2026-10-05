@@ -8,6 +8,7 @@ import { deleteOrphans, findOrphans, type Orphan } from "@/lib/media/orphans";
 import { disableReminders, enableReminders, remindersEnabled } from "@/lib/reminders";
 import { getUserId } from "@/lib/supabase";
 import { errorText } from "@/lib/useTrip";
+import { plural } from "@/lib/format";
 import { Icon } from "./Icon";
 import { MediaImg } from "./media/Media";
 import { fmtBytes } from "./StorageSection";
@@ -95,7 +96,7 @@ export function MeTools() {
   const clean = () => {
     if (!orphans?.length) return;
     const size = orphans.reduce((s, o) => s + o.size, 0);
-    if (!confirm(`Удалить ${orphans.length} неиспользуемых файлов (${fmtBytes(size)})? Они не привязаны ни к одному моменту, в том числе в корзине. Файлы на Google Диске попадут в корзину Диска (30 дней).`)) return;
+    if (!confirm(`Удалить ${orphans.length} ${plural(orphans.length, "неиспользуемый файл", "неиспользуемых файла", "неиспользуемых файлов")} (${fmtBytes(size)})? Они не привязаны ни к одному моменту, в том числе в корзине. Файлы на Google Диске попадут в корзину Диска (там их можно восстановить 30 дней).`)) return;
     void run("clean", async () => {
       const r = await deleteOrphans(orphans, (s) => setBusy(s));
       setOrphans(null);
@@ -108,13 +109,13 @@ export function MeTools() {
   return (
     <div className="meTools">
       <div className="settingsList">
-        <button className="settingsRow" onClick={toggleReminders} disabled={Boolean(busy)}>
+        <button className="settingsRow" role="switch" aria-checked={reminders} onClick={toggleReminders} disabled={Boolean(busy)}>
           <Icon name="calendar" size={20} />
           <span>Напоминания «Этот день»</span>
           <span className={`switch ${reminders ? "on" : ""}`} aria-hidden />
         </button>
         {canLock && (
-          <button className="settingsRow" onClick={toggleLock} disabled={Boolean(busy)}>
+          <button className="settingsRow" role="switch" aria-checked={lock} onClick={toggleLock} disabled={Boolean(busy)}>
             <Icon name="user" size={20} />
             <span>Вход по Face ID / отпечатку</span>
             <span className={`switch ${lock ? "on" : ""}`} aria-hidden />
@@ -150,7 +151,7 @@ export function MeTools() {
       {orphans && orphans.length > 0 && (
         <div className="orphanBox">
           <p>
-            Найдено {orphans.length} ({fmtBytes(orphanSize)}). Это фото и видео, которые убрали из моментов.
+            Найдено {orphans.length} {plural(orphans.length, "файл", "файла", "файлов")} ({fmtBytes(orphanSize)}). Это фото и видео, которые убрали из моментов.
           </p>
           <div className="impThumbs">
             {orphans.slice(0, 12).map((o) => (

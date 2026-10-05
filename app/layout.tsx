@@ -6,6 +6,7 @@ import { DriveBanner } from "@/components/DriveSection";
 import { OfflineBar } from "@/components/OfflineBar";
 import { AppLock } from "@/components/AppLock";
 import { SavePrompt } from "@/components/SavePrompt";
+import { NavTracker } from "@/components/BackLink";
 
 export const metadata: Metadata = {
   title: "Моя история",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <RegisterSW />
         <DriveBanner />
         <OfflineBar />
+        <NavTracker />
         <SavePrompt />
         <AppLock />
       </body>

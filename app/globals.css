@@ -423,7 +423,9 @@ mark.hl { background: rgba(47,123,255,.35); color: #fff; border-radius: 4px; pad
 .quota { margin-top: 12px; display: grid; gap: 6px; }
 .quotaBar { height: 8px; border-radius: 8px; background: rgba(255,255,255,.08); overflow: hidden; }
 .quotaBar i { display: block; height: 100%; border-radius: 8px; background: linear-gradient(90deg, #4688f4, #2f7bff); }
-.driveBanner { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 40; max-width: calc(100% - 32px); border: 1px solid rgba(70,136,244,.5); background: rgba(20,24,50,.95); color: #cfe0ff; font-weight: 750; font-size: 14px; padding: 12px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.driveBanner { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 40; width: max-content; max-width: calc(100% - 24px); display: flex; align-items: center; gap: 4px; border: 1px solid rgba(70,136,244,.5); background: rgba(20,24,50,.96); border-radius: 16px; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.driveBanner .dbMain { flex: 1; min-width: 0; border: 0; background: none; color: #cfe0ff; font: inherit; font-weight: 750; font-size: 14px; padding: 12px 6px 12px 16px; text-align: left; cursor: pointer; }
+.driveBanner .dbClose { border: 0; background: none; color: #8fa6cc; font-size: 22px; padding: 6px 12px; cursor: pointer; }
 .videoThumb img { width: 100%; height: 100%; object-fit: cover; }
 .videoPh { display: grid !important; place-items: center; font-size: 26px; }
 .storageBox { margin-top: 12px; }
@@ -524,7 +526,7 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 .leafletMap { width: 100%; height: 100%; background: #0b0f16; }
 .mapScreen { position: fixed; inset: 0; }
 .mapScreen .leafletMap { position: absolute; inset: 0; }
-.mapHead { position: absolute; z-index: 500; top: 0; left: 0; right: 0; display: grid; grid-template-columns: 46px 1fr 46px; align-items: center; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 14px 10px; background: linear-gradient(180deg, rgba(10,13,20,.85), transparent); pointer-events: none; }
+.mapHead { position: absolute; z-index: 500; top: 0; left: 0; right: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; align-items: center; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 14px 10px; background: linear-gradient(180deg, rgba(10,13,20,.85), transparent); pointer-events: none; }
 .mapHead > * { pointer-events: auto; }
 .mapHead h1 { text-align: center; font-size: 20px; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
 .ghostBtn { opacity: .0; }
@@ -628,7 +630,7 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 
 /* Новый момент */
 .newMoment { width: min(640px, 100%); margin: 0 auto; padding: max(8px, env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
-.nmHead { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; min-height: 52px; }
+.nmHead { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; min-height: 52px; }
 .nmHead h1 { text-align: center; font-size: 19px; }
 .nmSave { border: 0; background: none; color: var(--accent); font-weight: 800; font-size: 16px; padding: 10px 4px; min-height: 44px; }
 .typeTabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 14px; }
@@ -933,3 +935,14 @@ body { background: radial-gradient(60rem 36rem at 110% -10%, rgba(47,123,255,.16
 html.applocked body > *:not(.appLock) { visibility: hidden !important; }
 .savePrompt { position: fixed; z-index: 9000; left: 12px; right: 12px; bottom: calc(90px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-radius: 18px; background: #161c28; border: 1px solid rgba(47,123,255,.5); box-shadow: 0 16px 40px rgba(0,0,0,.55); max-width: 520px; margin: 0 auto; }
 .savePrompt span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.mTitleRow { display: flex; align-items: center; gap: 10px; }
+.mTitle { flex: 1; min-width: 0; margin: 0; font-size: 24px; line-height: 1.2; overflow-wrap: anywhere; }
+.mTitleRow .mMood { margin-left: 0; }
+
+/* Длинные названия не ломают вёрстку на маленьких экранах */
+.nmHead h1, .mapHead h1, .appHeader h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heroTitle h1, .btText strong, .stText strong, .bkTripHead h2, .bkCoverText h1 { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.stText strong { -webkit-line-clamp: 2; }
+.tlText strong, .tripRowText strong, .mrText strong, .mcText strong, .momentRow strong { overflow-wrap: anywhere; }
+.nmHead { min-width: 0; }
+.mcLink { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; color: inherit; text-decoration: none; }

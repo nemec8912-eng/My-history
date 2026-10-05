@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import { MediaImg } from "@/components/media/Media";
 import { useMediaMetas } from "@/components/media/useMedia";
 import { routes } from "@/lib/routes";
+import { plural } from "@/lib/format";
 import { fmtKm, isEvent, momentDate, tripCover, tripDateRange, tripKm, tripMediaIds } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import type { Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const RU_MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const nice = (d: string) => {
@@ -101,9 +102,9 @@ function Book() {
   return (
     <main className="bookPage">
       <header className="nmHead noPrint">
-        <Link href={tripId ? routes.trip(tripId) : routes.year(year ?? undefined)} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={tripId ? routes.trip(tripId) : routes.year(year ?? undefined)} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Фотокнига</h1>
         <span style={{ width: 40 }} />
       </header>
@@ -123,7 +124,7 @@ function Book() {
               <span>Моя история</span>
               <h1>{title}</h1>
               <p>
-                {tripId ? tripDateRange(list[0]) : `${list.length} поездок и событий`} · {photoCount} фото
+                {tripId ? tripDateRange(list[0]) : `${list.length} ${plural(list.length, "поездка или событие", "поездки и события", "поездок и событий")}`} · {photoCount} фото
               </p>
             </div>
           </section>

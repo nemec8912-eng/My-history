@@ -1,5 +1,6 @@
 "use client";
 
+import { isEvent } from "@/lib/stats";
 import { useState } from "react";
 import type { Trip } from "@/lib/types";
 import { withAddedMedia } from "./CheckpointEditor";
@@ -27,13 +28,13 @@ export function TripEditor({
         onSave({ ...t, title: t.title.trim() || "Без названия" });
       }}
     >
-      <p className="eyebrow">{t.meta?.kind === "event" ? "Событие" : "Поездка"}</p>
+      <p className="eyebrow">{isEvent(t) ? "Событие" : "Поездка"}</p>
       <h3>Изменить</h3>
       <div className="segmented2">
-        <button type="button" className={t.meta?.kind !== "event" ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "trip" } })}>
+        <button type="button" className={!isEvent(t) ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "trip" } })}>
           Поездка
         </button>
-        <button type="button" className={t.meta?.kind === "event" ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "event" } })}>
+        <button type="button" className={isEvent(t) ? "on" : ""} onClick={() => set({ meta: { ...t.meta, kind: "event" } })}>
           Событие
         </button>
       </div>
@@ -69,7 +70,7 @@ export function TripEditor({
       </fieldset>
       <div className="editorActions">
         {onDelete && (
-          <button type="button" className="dangerBtn" onClick={() => confirm("Перенести поездку в корзину? Её можно восстановить в течение 30 дней (раздел «Я» → «Корзина»).") && onDelete()}>
+          <button type="button" className="dangerBtn" onClick={() => confirm(`Перенести ${isEvent(t) ? "событие" : "поездку"} в корзину? ${isEvent(t) ? "Его" : "Её"} можно восстановить в течение 30 дней (раздел «Я» → «Корзина»).`) && onDelete()}>
             Удалить
           </button>
         )}

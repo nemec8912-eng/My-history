@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { MediaImg } from "@/components/media/Media";
@@ -9,6 +8,7 @@ import { getRepo, TRASH_DAYS } from "@/lib/repo";
 import { routes } from "@/lib/routes";
 import { kindLabel, tripCover, tripDateRange } from "@/lib/stats";
 import type { Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const daysLeft = (t: Trip) => Math.max(0, TRASH_DAYS - Math.floor((Date.now() - new Date(t.meta!.deletedAt!).getTime()) / 86_400_000));
 
@@ -30,7 +30,7 @@ export default function TrashPage() {
   useEffect(load, [load]);
 
   async function act(t: Trip, what: "restore" | "purge") {
-    if (what === "purge" && !confirm(`Удалить «${t.title}» навсегда? Это нельзя отменить. Сами файлы фото и видео на Google Диске останутся.`)) return;
+    if (what === "purge" && !confirm(`Удалить «${t.title}» навсегда? Это нельзя отменить. Сами файлы фото и видео не удаляются — их можно убрать в «Я» → «Неиспользуемые файлы».`)) return;
     setBusy(t.id);
     try {
       const r = await getRepo();
@@ -47,9 +47,9 @@ export default function TrashPage() {
   return (
     <main className="shell trashPage">
       <header className="nmHead">
-        <Link href={routes.me} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.me} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Корзина</h1>
         <span style={{ width: 40 }} />
       </header>

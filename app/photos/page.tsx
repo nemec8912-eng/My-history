@@ -90,7 +90,7 @@ export default function PhotosPage() {
               <MediaGallery ids={g.items.map((i) => i.id)} kinds={f === "all" ? ["image", "video"] : [f]} />
             </section>
           ))}
-          {trips && groups.length === 0 && <p className="muted">Пока пусто. Добавьте фото в момент или поездку.</p>}
+          {trips && groups.length === 0 && metas.length >= refs.length && <p className="muted">Пока пусто. Добавьте фото в момент или поездку.</p>}
         </>
       )}
     </TabScreen>

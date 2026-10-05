@@ -6,7 +6,9 @@ import { Suspense } from "react";
 import { Icon } from "@/components/Icon";
 import { MediaGallery } from "@/components/media/Media";
 import { routes } from "@/lib/routes";
+import { plural } from "@/lib/format";
 import { useUserData } from "@/lib/userdata";
+import { BackLink } from "@/components/BackLink";
 
 function AlbumView() {
   const id = useSearchParams().get("id");
@@ -14,15 +16,21 @@ function AlbumView() {
   const { data, update } = useUserData();
   const album = data?.albums?.find((a) => a.id === id);
   if (data === null) return <main className="shell"><p className="muted">Загрузка…</p></main>;
-  if (!album) return <main className="shell"><p className="muted">Альбом не найден.</p></main>;
+  if (!album)
+    return (
+      <main className="shell">
+        <Link className="backLink" href={routes.albums}>← Альбомы</Link>
+        <p className="muted" style={{ marginTop: 20 }}>Альбом не найден.</p>
+      </main>
+    );
   const patch = (fn: (ids: string[]) => string[], title?: string) =>
     update((d) => ({ ...d, albums: (d.albums ?? []).map((a) => (a.id === album.id ? { ...a, title: title ?? a.title, mediaIds: fn(a.mediaIds) } : a)) }));
   return (
     <main className="shell albumPage">
       <header className="nmHead">
-        <Link href={routes.albums} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.albums} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>{album.title}</h1>
         <button
           className="iconBtnPlain"
@@ -35,7 +43,7 @@ function AlbumView() {
           <Icon name="edit" />
         </button>
       </header>
-      <p className="muted small">{album.mediaIds.length} файлов · добавляйте фото кнопкой «В альбом» при просмотре.</p>
+      <p className="muted small">{album.mediaIds.length} {plural(album.mediaIds.length, "файл", "файла", "файлов")} · добавляйте фото кнопкой «В альбом» при просмотре.</p>
       <MediaGallery
         ids={album.mediaIds}
         onRemove={(mid) => void patch((x) => x.filter((m) => m !== mid))}

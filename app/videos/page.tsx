@@ -48,7 +48,7 @@ export default function VideosPage() {
           По поездкам
         </button>
       </div>
-      {videos.length === 0 && trips && <p className="muted">Видео пока нет. Добавьте ролик в момент — он появится здесь.</p>}
+      {videos.length === 0 && trips && metas.length >= refs.length && <p className="muted">Видео пока нет. Добавьте ролик в момент — он появится здесь.</p>}
       {mode === "all" ? (
         <MediaGallery ids={videos.map((v) => v.id)} kinds={["video"]} />
       ) : (

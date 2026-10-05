@@ -109,6 +109,20 @@ function Timeline() {
         <TagFilter tags={tags} value={tag} onChange={setTag} />
       </div>
       {trips && trips.length === 0 && <p className="muted">Здесь появится лента ваших воспоминаний по годам.</p>}
+      {trips && trips.length > 0 && years.length === 0 && (
+        <p className="muted emptyNote">
+          Ничего не подходит под фильтр.{" "}
+          <button
+            className="linkBtn"
+            onClick={() => {
+              setTag(null);
+              setBest(false);
+            }}
+          >
+            Показать всё
+          </button>
+        </p>
+      )}
       <div className="timeline2">
         {years.map(({ y, months }) => (
           <section key={y} className="tlSection">

@@ -113,7 +113,7 @@ export function StoryPoint({
         className={`storyMarker ${cp.kind}`}
         style={{ left: x, top: y, ...delay }}
         onClick={() => onOpen(cp)}
-        aria-label={cp.title}
+        aria-label={cp.title || "Точка маршрута"}
       >
         <StoryPointMarker node={node} />
       </button>

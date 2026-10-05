@@ -26,6 +26,7 @@ import { createCheckpoint } from "@/lib/markerStyle";
 import { useTrip } from "@/lib/useTrip";
 import { routes } from "@/lib/routes";
 import type { Checkpoint, TravelMode, Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const LeafletMap = dynamic(() => import("@/components/map/LeafletMap").then((m) => m.LeafletMap), { ssr: false });
 
@@ -103,7 +104,7 @@ function TripActions({ trip, onTrack }: { trip: Trip; onTrack: (r: Trip["route"]
           <Icon name="grid" size={18} /> Коллаж
         </button>
       )}
-      <Link className="taBtn" href={routes.plan(trip.id)}>
+      <Link className="taBtn" href={routes.plan(trip.id, isEvent(trip) ? "money" : undefined)}>
         <Icon name="note" size={18} /> {isEvent(trip) ? "Расходы, документы" : "Сборы, расходы, документы"}
         {spent > 0 ? ` · ${rub(spent)}` : ""}
       </Link>
@@ -187,7 +188,7 @@ export function TripView() {
   const openCp = openIndex >= 0 ? cps[openIndex] : null;
   const end = cps.find((c) => c.kind === "end");
 
-  const saveCp = (cp: Checkpoint) => update({ ...trip, checkpoints: cps.map((c) => (c.id === cp.id ? cp : c)) });
+  const saveCp = (cp: Checkpoint) => update((cur) => ({ ...cur, checkpoints: cur.checkpoints.map((c) => (c.id === cp.id ? cp : c)) }));
   const setEndpoint = (cid: string, kind: "start" | "end") => {
     const selected = cps.find((c) => c.id === cid);
     if (!selected) return;
@@ -204,7 +205,7 @@ export function TripView() {
     setOpenId(cid);
   };
   const deleteCp = (cid: string) => {
-    update({ ...trip, checkpoints: cps.filter((c) => c.id !== cid) });
+    update((cur) => ({ ...cur, checkpoints: cur.checkpoints.filter((c) => c.id !== cid) }));
     setOpenId(null);
   };
   const moveCp = (cid: string, dir: -1 | 1) => {
@@ -238,6 +239,8 @@ export function TripView() {
     { id: "moments", label: "Моменты" },
   ];
   const located = cps.filter(hasCoords);
+  // Поездку сделали событием — вкладки «Маршрут» больше нет: возвращаемся на «Обзор».
+  const activeTab: Tab = tabs.some((t) => t.id === tab) ? tab : "overview";
 
   return (
     <main className="tripPage v2">
@@ -247,9 +250,9 @@ export function TripView() {
           <i className="coverShade" />
         </div>
         <div className="heroBar">
-          <Link className="roundBtn" href="/" aria-label="Назад">
+          <BackLink className="roundBtn" href="/">
             <Icon name="back" />
-          </Link>
+          </BackLink>
           <span className="heroBarRight">
             <button className="pillBtn" onClick={() => setEditTrip(true)}>
               Изменить
@@ -271,13 +274,13 @@ export function TripView() {
 
       <div className="tabsRow" role="tablist">
         {tabs.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+          <button key={t.id} role="tab" aria-selected={activeTab === t.id} className={activeTab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "overview" && (
+      {activeTab === "overview" && (
         <section className="tabBody">
           <TripStatTiles trip={trip} />
           <div className="tripRating">
@@ -314,7 +317,7 @@ export function TripView() {
         </section>
       )}
 
-      {tab === "route" && (
+      {activeTab === "route" && (
         <section className="tabBody">
           <JourneyStrip points={cps} onOpen={(cp) => setOpenId(cp.id)} />
           <section className="storySection">
@@ -325,21 +328,21 @@ export function TripView() {
         </section>
       )}
 
-      {tab === "photos" && (
+      {activeTab === "photos" && (
         <section className="tabBody">
           <MediaPicker kinds={["image"]} onAdd={(items) => update((cur) => withAddedMedia(cur, items))} />
           <MediaGallery ids={tripMediaIds(trip)} kinds={["image"]} empty="Фотографий пока нет." />
         </section>
       )}
 
-      {tab === "videos" && (
+      {activeTab === "videos" && (
         <section className="tabBody">
           <MediaPicker kinds={["video"]} onAdd={(items) => update((cur) => withAddedMedia(cur, items))} />
           <MediaGallery ids={tripMediaIds(trip)} kinds={["video"]} empty="Видео пока нет." />
         </section>
       )}
 
-      {tab === "moments" && (
+      {activeTab === "moments" && (
         <section className="tabBody">
           <div className="momentList">
             {cps.filter((c) => Boolean(c.meta?.type)).map((c) => (
@@ -363,6 +366,7 @@ export function TripView() {
               </Link>
             ))}
           </div>
+          {!cps.some((c) => Boolean(c.meta?.type)) && <p className="muted small emptyNote">Моментов пока нет. Точки маршрута — во вкладке «Маршрут».</p>}
           <Link className="addPointBtn linkBtnBlock" href={routes.newMoment(trip.id)}>
             + Добавить момент
           </Link>
@@ -378,6 +382,11 @@ export function TripView() {
           total={cps.length}
           startInEdit={openCp.id === newId}
           onClose={() => {
+            // Новую точку закрыли, так и не сохранив, — не оставляем пустую «Без названия» в маршруте.
+            if (newId && openCp.id === newId) {
+              const id = newId;
+              update((cur) => ({ ...cur, checkpoints: cur.checkpoints.filter((c) => c.id !== id) }));
+            }
             setOpenId(null);
             setNewId(null);
           }}
@@ -406,12 +415,18 @@ export function TripView() {
             value={trip}
             onCancel={() => setEditTrip(false)}
             onSave={(t) => {
-              update(t);
+              // Точки маршрута в этом окне не меняются — берём их свежую версию (вдруг пока догружались фото).
+              update((cur) => ({
+                ...t,
+                checkpoints: cur.checkpoints,
+                mediaIds: Array.from(new Set([...cur.mediaIds, ...t.mediaIds])),
+                meta: { ...cur.meta, kind: t.meta?.kind, endDate: t.meta?.endDate },
+              }));
               setEditTrip(false);
             }}
             onDelete={async () => {
               await remove();
-              router.push("/");
+              router.replace("/");
             }}
           />
         </Sheet>

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import { useMediaMetas } from "@/components/media/useMedia";
@@ -8,6 +7,7 @@ import { allMediaIds, computeAchievements } from "@/lib/achievements";
 import { routes } from "@/lib/routes";
 import { useTrips } from "@/lib/useTrips";
 import { useUserData } from "@/lib/userdata";
+import { BackLink } from "@/components/BackLink";
 
 /** Достижения — по реальным моментам, поездкам, километрам и фото. */
 export default function AchievementsPage() {
@@ -21,9 +21,9 @@ export default function AchievementsPage() {
   return (
     <main className="shell achPage">
       <header className="nmHead">
-        <Link href={routes.me} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.me} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Достижения</h1>
         <span style={{ width: 40 }} />
       </header>

@@ -59,7 +59,7 @@ export function StoryPointModal({
             onSave(next);
             setEdit(false);
           }}
-          onDelete={regular ? () => confirm("Удалить эту точку? Фото и видео останутся на Google Диске.") && onDelete(cp.id) : undefined}
+          onDelete={regular ? () => confirm("Удалить эту точку? Сами файлы фото и видео не удаляются.") && onDelete(cp.id) : undefined}
           onMove={regular ? (dir) => onMove(cp.id, dir) : undefined}
           canMoveUp={regular && index > 1}
           canMoveDown={regular && index < total - 2}

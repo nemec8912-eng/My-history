@@ -3,6 +3,7 @@
 import { formatDuration, minutesOf } from "@/lib/format";
 import type { Checkpoint } from "@/lib/types";
 import { MediaImg } from "../media/Media";
+import { plural } from "@/lib/format";
 
 /** Большая карточка конечной локации под маршрутом. */
 export function DestinationCard({ cp, onOpen }: { cp: Checkpoint; onOpen: () => void }) {
@@ -24,8 +25,8 @@ export function DestinationCard({ cp, onOpen }: { cp: Checkpoint; onOpen: () => 
         </p>
         {cp.location?.label && <p className="muted small">📍 {cp.location.label}</p>}
         <div className="destStats">
-          <span>{cp.mediaIds.length} файлов</span>
-          <span>{moments} моментов</span>
+          <span>{cp.mediaIds.length} {plural(cp.mediaIds.length, "файл", "файла", "файлов")}</span>
+          <span>{moments} {plural(moments, "момент", "момента", "моментов")}</span>
         </div>
         <span className="destOpen">Открыть локацию ›</span>
       </div>

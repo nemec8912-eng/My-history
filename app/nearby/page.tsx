@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -13,6 +12,7 @@ import { hasCoords } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import { useUserData } from "@/lib/userdata";
 import type { GeoPoint } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const fmt = (km: number) => (km < 1 ? `${Math.round(km * 1000)} м` : `${km.toFixed(km < 10 ? 1 : 0).replace(".", ",")} км`);
 
@@ -58,9 +58,9 @@ function Nearby() {
   return (
     <main className="shell nearbyPage">
       <header className="nmHead">
-        <Link href={routes.map} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.map} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Интересное рядом</h1>
         <button className="iconBtnPlain" aria-label="Рядом со мной" onClick={() => currentPosition().then(setPoint).catch((e) => setErr(String(e?.message ?? e)))}>
           <Icon name="locate" />
@@ -68,7 +68,7 @@ function Nearby() {
       </header>
       <p className="hint">Места из Википедии в радиусе 10 км. Отмечено, где вы уже были.</p>
       <label className="checkRow">
-        <input type="checkbox" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} /> Только где ещё не был
+        <input type="checkbox" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} /> Только где ещё не были
       </label>
       {err && <p className="errorBar">{err}</p>}
       {point && list === null && !err && <p className="muted">Ищу…</p>}

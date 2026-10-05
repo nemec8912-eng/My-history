@@ -178,7 +178,15 @@ export function NewMoment() {
   return (
     <main className="newMoment">
       <header className="nmHead">
-        <Link href={preset ? routes.trip(preset) : routes.home} className="iconBtnPlain" aria-label="Назад">
+        <Link
+          href={preset ? routes.trip(preset) : routes.home}
+          className="iconBtnPlain"
+          aria-label="Назад"
+          onClick={(e) => {
+            // Не теряем черновик молча.
+            if ((media.length || text.trim() || title.trim()) && !saving && !confirm("Выйти без сохранения? Текст и добавленные фото не сохранятся в момент.")) e.preventDefault();
+          }}
+        >
           <Icon name="back" />
         </Link>
         <h1>Новый момент</h1>

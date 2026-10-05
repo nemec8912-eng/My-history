@@ -11,6 +11,7 @@ import { routes } from "@/lib/routes";
 import { fmtKm, isEvent, momentDate, tripDateRange, tripKm } from "@/lib/stats";
 import { useTrip } from "@/lib/useTrip";
 import type { Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const W = 720;
 const H = 1280;
@@ -325,14 +326,20 @@ function Recap() {
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   if (status === "loading") return <main className="shell"><p className="muted">Загрузка…</p></main>;
-  if (!trip) return <main className="shell"><p className="muted">Поездка не найдена.</p></main>;
+  if (!trip)
+    return (
+      <main className="shell">
+        <Link className="backLink" href="/">← На главную</Link>
+        <p className="muted" style={{ marginTop: 20 }}>Поездка не найдена.</p>
+      </main>
+    );
 
   return (
     <main className="shell recapPage">
       <header className="nmHead">
-        <Link href={routes.trip(trip.id)} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.trip(trip.id)} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Видео-итог</h1>
         <span style={{ width: 40 }} />
       </header>

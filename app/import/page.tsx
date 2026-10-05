@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { readTakeoutFiles, readTakeoutZips, type TakeoutItem } from "@/lib/takeout";
@@ -17,6 +16,7 @@ import { routes } from "@/lib/routes";
 import { isEvent, momentDate } from "@/lib/stats";
 import { useTrips } from "@/lib/useTrips";
 import type { Checkpoint, Trip } from "@/lib/types";
+import { BackLink } from "@/components/BackLink";
 
 const RU_MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const dayLabel = (d: string) => {
@@ -249,9 +249,9 @@ export default function ImportPage() {
   return (
     <main className="newMoment importPage">
       <header className="nmHead">
-        <Link href={routes.newMoment()} className="iconBtnPlain" aria-label="Назад">
+        <BackLink href={routes.newMoment()} className="iconBtnPlain">
           <Icon name="back" />
-        </Link>
+        </BackLink>
         <h1>Импорт из галереи</h1>
         <span style={{ width: 40 }} />
       </header>
