@@ -953,3 +953,4 @@ html.applocked body > *:not(.appLock) { visibility: hidden !important; }
 .meTools .settingsList > :last-child { border-bottom: 0; }
 button.taBtn { font: inherit; font-size: 14px; font-weight: 700; line-height: 1.2; min-height: 0; padding: 9px 14px; }
 .quickRow { margin-bottom: 18px; }
+.nmSubLabel { font-size: 13px; font-weight: 700; color: var(--muted); margin-top: 4px; }

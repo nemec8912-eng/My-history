@@ -277,6 +277,7 @@ export function NewMoment() {
           <VoiceButton onText={(t) => setText((p) => appendSpoken(p, t))} />
           <input placeholder="Название (необязательно)" value={title} onChange={(e) => setTitle(e.target.value)} />
           <TagInput value={tags} onChange={setTags} suggestions={tagHints} />
+          <span className="nmSubLabel">Настроение</span>
           <MoodPicker value={mood} onChange={setMood} />
         </div>
         <div className="nmRow">

@@ -37,7 +37,7 @@ function YearRecap() {
     // Моменты — это точки с содержанием: обычные точки, а начало/конец пути — только если к ним что-то добавлено.
     () =>
       (all ?? []).flatMap((t) =>
-        t.checkpoints.filter((c) => momentDate(t, c).startsWith(y) && (c.kind === "regular" || c.mediaIds.length > 0 || Boolean(c.description))).map((c) => ({ t, c }))
+        t.checkpoints.filter((c) => momentDate(t, c).startsWith(y) && (c.kind === "regular" || c.mediaIds.length > 0)).map((c) => ({ t, c }))
       ),
     [all, y]
   );
