@@ -32,6 +32,7 @@ jobs:
           node e2e/features.mjs
           node e2e/features2.mjs
           node e2e/features3.mjs
+          node e2e/smoke.mjs
           if git log -1 --pretty=%B | grep -q "\[cloud-e2e\]"; then node e2e/cloudsync.mjs; fi
       - name: Publish to ci-screens branch
         run: |
