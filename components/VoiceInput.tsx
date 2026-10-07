@@ -9,13 +9,21 @@ type Rec = any;
 const getCtor = (): (new () => Rec) | null =>
   typeof window === "undefined" ? null : ((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null);
 
+const KEYBOARD_HINT = "Можно нажать на поле описания и продиктовать через микрофон на клавиатуре.";
+
 /**
  * Диктовка: говорите — текст дописывается в описание. Распознавание делает сам браузер
  * (Safari на iPhone, Chrome на Android/ПК). Если браузер не умеет — кнопки просто нет.
+ *
+ * Safari на iPhone часто не помечает фразу как «окончательную» и просто завершает распознавание,
+ * поэтому мы держим промежуточный текст и дописываем его, когда распознавание закончилось
+ * (в том числе по нажатию «закончить»). Так ничего из сказанного не теряется.
  */
 export function VoiceButton({ onText }: { onText: (text: string) => void }) {
   const [supported, setSupported] = useState(false);
   const [on, setOn] = useState(false);
+  const [live, setLive] = useState("");
+  const [note, setNote] = useState("");
   const rec = useRef<Rec>(null);
   const cb = useRef(onText);
   cb.current = onText;
@@ -28,7 +36,11 @@ export function VoiceButton({ onText }: { onText: (text: string) => void }) {
 
   function toggle() {
     if (on) {
-      rec.current?.stop();
+      try {
+        rec.current?.stop();
+      } catch {
+        /* уже остановлено */
+      }
       return;
     }
     const Ctor = getCtor();
@@ -36,30 +48,81 @@ export function VoiceButton({ onText }: { onText: (text: string) => void }) {
     const r = new Ctor();
     r.lang = "ru-RU";
     r.continuous = true;
-    r.interimResults = false;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+
+    let sentUpTo = 0; // сколько результатов уже дописано в текст
+    let pending = ""; // распознанное, но ещё не дописанное
+    let gotAny = false;
+    let errored = false;
+    let ended = false;
+
+    const commit = (text: string) => {
+      const t = text.replace(/\s+/g, " ").trim();
+      if (!t) return;
+      gotAny = true;
+      cb.current(t);
+    };
+
     r.onresult = (e: any) => {
-      let text = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) text += e.results[i][0].transcript;
-      if (text.trim()) cb.current(text.trim());
+      if (ended) return;
+      let finals = "";
+      let interim = "";
+      for (let i = sentUpTo; i < e.results.length; i++) {
+        const res = e.results[i];
+        const tr = res[0]?.transcript ?? "";
+        if (res.isFinal && i === sentUpTo) {
+          finals += ` ${tr}`;
+          sentUpTo = i + 1;
+        } else interim += ` ${tr}`;
+      }
+      if (finals.trim()) commit(finals);
+      pending = interim.trim();
+      setLive(pending);
     };
     r.onerror = (e: any) => {
-      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") alert("Разрешите доступ к микрофону, чтобы диктовать.");
-      setOn(false);
+      const code = e?.error;
+      if (code === "aborted") return;
+      if (code === "no-speech") {
+        setNote("Не расслышал. Нажмите ещё раз и говорите чуть громче.");
+        return;
+      }
+      errored = true;
+      if (code === "not-allowed" || code === "service-not-allowed")
+        setNote(`Нет доступа к распознаванию речи. Разрешите микрофон в настройках браузера. ${KEYBOARD_HINT}`);
+      else if (code === "network") setNote(`Распознавание речи требует интернет. ${KEYBOARD_HINT}`);
+      else if (code === "audio-capture") setNote(`Микрофон недоступен. ${KEYBOARD_HINT}`);
+      else setNote(`Не получилось распознать речь. ${KEYBOARD_HINT}`);
     };
-    r.onend = () => setOn(false);
+    r.onend = () => {
+      if (ended) return;
+      ended = true;
+      if (pending) commit(pending);
+      pending = "";
+      setLive("");
+      setOn(false);
+      if (!gotAny && !errored) setNote((n) => n || `Текст не распознан. ${KEYBOARD_HINT}`);
+    };
     rec.current = r;
+    setNote("");
+    setLive("");
     try {
       r.start();
       setOn(true);
     } catch {
       setOn(false);
+      setNote(`Не удалось включить диктовку. ${KEYBOARD_HINT}`);
     }
   }
 
   return (
-    <button type="button" className={`voiceBtn ${on ? "on" : ""}`} onClick={toggle} aria-label={on ? "Остановить диктовку" : "Надиктовать"}>
-      <Icon name="audio" size={18} /> {on ? "Слушаю… нажмите, чтобы закончить" : "Надиктовать"}
-    </button>
+    <>
+      <button type="button" className={`voiceBtn ${on ? "on" : ""}`} onClick={toggle} aria-label={on ? "Остановить диктовку" : "Надиктовать"}>
+        <Icon name="audio" size={18} /> {on ? "Слушаю… нажмите, чтобы закончить" : "Надиктовать"}
+      </button>
+      {on && live && <span className="voiceLive">{live}</span>}
+      {!on && note && <span className="voiceNote">{note}</span>}
+    </>
   );
 }
 
