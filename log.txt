@@ -1,0 +1,43 @@
+[cloud] health: 200 {"version":"v2.197.0","name":"GoTrue","description":"GoTrue is a user registration and authentication API"}
+[cloud] auth settings: 200 {"external":{"anonymous_users":false,"apple":false,"azure":false,"bitbucket":false,"discord":false,"facebook":false,"snapchat":false,"figma":false,"fly":false,"github":false,"gitlab":false,"google":false,"keycloak":false,"kakao":false,"linkedin":false,"linkedin_oidc":false,"notion":false,"spotify":f
+[cloud] email enabled=true autoconfirm=false disable_signup=false
+[cloud] table trips: 200 []
+[cloud] table checkpoints: 200 []
+[cloud] table media: 200 []
+[cloud] table media_storage: 200 []
+[cloud] storage bucket media (anon): 400 {"statusCode":"404","error":"Bucket not found","message":"Bucket not found","code":"NoSuchBucket"}
+[cloud] column trips.meta: 200 []
+[cloud] META trips: OK
+[cloud] column checkpoints.meta: 200 []
+[cloud] META checkpoints: OK
+[google] status=302 redirect_registered=true mismatch=false badClient=false location=https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-232667416%3A1791403573830820&client_id=1070994696426-v3iu3kofjktbkui5q575ffho9t14oi1h.apps
+[iphone] me: title=Вход error=null
+[iphone] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+[iphone] login with wrong password -> Неверный email или пароль.
+[iphone] next point -> Парк
+[iphone] place suggestions: 6
+[iphone] weather: ☀️ +11° Ясно
+[iphone] event after reload: Вышел погулять — а там фестиваль воздушных змеев!
+[iphone] map markers: 5
+[iphone] search "Ка": 6 results
+[iphone] OK url=https://nemec8912-eng.github.io/My-history/trip/?id=2514852a-62e2-4f60-91c2-a9b6c5dc38bd overflowX=false
+[android] me: title=Вход error=null
+[android] console.error: Failed to load resource: the server responded with a status of 400 ()
+[android] login with wrong password -> Неверный email или пароль.
+[android] next point -> Парк
+[android] place suggestions: 6
+[android] weather: ☀️ +11° Ясно
+[android] event after reload: Вышел погулять — а там фестиваль воздушных змеев!
+[android] map markers: 5
+[android] search "Ка": 6 results
+[android] OK url=https://nemec8912-eng.github.io/My-history/trip/?id=21788b0b-d49e-4f7b-bd07-fd0a135b2391 overflowX=false
+[desktop] me: title=Вход error=null
+[desktop] console.error: Failed to load resource: the server responded with a status of 400 ()
+[desktop] login with wrong password -> Неверный email или пароль.
+[desktop] next point -> Парк
+[desktop] place suggestions: 6
+[desktop] weather: ☀️ +11° Ясно
+[desktop] event after reload: Вышел погулять — а там фестиваль воздушных змеев!
+[desktop] map markers: 5
+[desktop] search "Ка": 6 results
+[desktop] OK url=https://nemec8912-eng.github.io/My-history/trip/?id=56670296-9b7d-43b7-b84a-ae6cb37f7b28 overflowX=false
